@@ -12,6 +12,9 @@ BASE_URL="${BASE_URL:-https://34.149.73.0.nip.io}"
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="${KUBECTL:-kubectl}"
 
+# Run everything from repo root so all paths are relative
+cd "$DEMO_DIR"
+
 # ── Colors ────────────────────────────────────────────────────────────────────
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'
 C='\033[0;36m'; M='\033[0;35m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
@@ -194,7 +197,7 @@ section "CRDs enforce correctness at the API layer"
 say "Invalid input is rejected BEFORE the controller even sees it."
 echo ""
 
-run_and_pause "cat $DEMO_DIR/deploy/examples/hello-api.yaml" \
+run_and_pause "cat ./deploy/examples/hello-api.yaml" \
     "This is ALL you write to manage an Apigee API proxy:"
 
 next
@@ -264,7 +267,7 @@ echo ""
 run_step "kubectl delete apigeeapi hello-api --ignore-not-found 2>/dev/null; sleep 1" \
     "Clean slate first:"
 
-run_step "$K apply -f $DEMO_DIR/deploy/examples/hello-api.yaml" \
+run_step "$K apply -f ./deploy/examples/hello-api.yaml" \
     "Create the ApigeeAPI custom resource:"
 
 run_watch "$K get aapi -w" \
@@ -388,7 +391,7 @@ say "Apply the CR, wait for Ready, then watch for 20 seconds."
 say "The revision number should NOT change."
 echo ""
 
-run_step "$K apply -f $DEMO_DIR/deploy/examples/hello-api.yaml" \
+run_step "$K apply -f ./deploy/examples/hello-api.yaml" \
     "Re-create hello-api:"
 
 run_step "sleep 20 && $K get apigeeapi hello-api -o jsonpath='revision={.status.proxyRevision} observedGen={.status.observedGeneration} gen={.metadata.generation}' && echo" \
@@ -409,9 +412,9 @@ echo ""
 section "Deploy 3 more APIs simultaneously"
 
 run_step "$K apply \
-  -f $DEMO_DIR/deploy/examples/echo-api.yaml \
-  -f $DEMO_DIR/deploy/examples/mock-users-api.yaml \
-  -f $DEMO_DIR/deploy/examples/google-api.yaml" \
+  -f ./deploy/examples/echo-api.yaml \
+  -f ./deploy/examples/mock-users-api.yaml \
+  -f ./deploy/examples/google-api.yaml" \
     "Apply 3 CRs at once:"
 
 run_watch "$K get aapi -w" \
