@@ -287,14 +287,17 @@ func (c *Client) readError(resp *http.Response) error {
 }
 
 // generateProxyBundle creates an Apigee proxy bundle ZIP in memory.
-// A proxy bundle is a ZIP file containing XML configuration:
+// The bundle consists of XML files inside a ZIP:
 //
-//	apiproxy/
-//	├── {proxyName}.xml          (main proxy config)
-//	├── proxies/
-//	│   └── default.xml          (ProxyEndpoint — the incoming side)
-//	└── targets/
-//	    └── default.xml          (TargetEndpoint — the backend side)
+//   apiproxy/{name}.xml              - main proxy config
+//   apiproxy/policies/StripBasePath.xml - removes basePath prefix before forwarding
+//   apiproxy/proxies/default.xml     - ProxyEndpoint (incoming side)
+//   apiproxy/targets/default.xml     - TargetEndpoint (backend side)
+//
+// Path stripping: by default Apigee forwards the full request path (including
+// basePath) to the backend. The StripBasePath AssignMessage policy rewrites
+// the path so backends only see the suffix after the basePath.
+// Example: GET /echo/headers -> backend receives GET /headers
 func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]byte, error) {
 	if description == "" {
 		description = "Managed by Kubernetes ApigeeAPI operator"
@@ -303,12 +306,13 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
-	// Main proxy config
 	mainXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <APIProxy revision="1" name="%s">
   <Description>%s</Description>
   <BasePaths>%s</BasePaths>
-  <Policies/>
+  <Policies>
+    <Policy>StripBasePath</Policy>
+  </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>default</ProxyEndpoint>
   </ProxyEndpoints>
@@ -317,11 +321,29 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
   </TargetEndpoints>
 </APIProxy>`, proxyName, description, basePath)
 
-	// ProxyEndpoint — defines the incoming request handling
+	// AssignMessage policy: rewrites the forwarded path to proxy.pathsuffix —
+	// the built-in Apigee variable containing the URL path AFTER the basePath.
+	// Example: basePath=/echo, request=/echo/headers -> proxy.pathsuffix=/headers
+	// This is the canonical Apigee X way to strip the basePath before forwarding.
+	stripPolicyXML := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="StripBasePath">
+  <DisplayName>StripBasePath</DisplayName>
+  <AssignTo createNew="false" type="request"/>
+  <Set>
+    <Path>{proxy.pathsuffix}</Path>
+  </Set>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+</AssignMessage>`
+
+	// ProxyEndpoint: runs StripBasePath in PreFlow before routing to target
 	proxyXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ProxyEndpoint name="default">
   <PreFlow name="PreFlow">
-    <Request/>
+    <Request>
+      <Step>
+        <Name>StripBasePath</Name>
+      </Step>
+    </Request>
     <Response/>
   </PreFlow>
   <Flows/>
@@ -337,7 +359,7 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
   </RouteRule>
 </ProxyEndpoint>`, basePath)
 
-	// TargetEndpoint — defines the backend URL
+	// TargetEndpoint: receives path already stripped of the basePath prefix
 	targetXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <TargetEndpoint name="default">
   <PreFlow name="PreFlow">
@@ -355,17 +377,18 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
 </TargetEndpoint>`, targetURL)
 
 	files := map[string]string{
-		"apiproxy/" + proxyName + ".xml": mainXML,
-		"apiproxy/proxies/default.xml":   proxyXML,
-		"apiproxy/targets/default.xml":   targetXML,
+		"apiproxy/" + proxyName + ".xml":        mainXML,
+		"apiproxy/policies/StripBasePath.xml":   stripPolicyXML,
+		"apiproxy/proxies/default.xml":          proxyXML,
+		"apiproxy/targets/default.xml":          targetXML,
 	}
 
-	for name, content := range files {
+	for name, fileContent := range files {
 		fw, err := zw.Create(name)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := fw.Write([]byte(content)); err != nil {
+		if _, err := fw.Write([]byte(fileContent)); err != nil {
 			return nil, err
 		}
 	}
@@ -375,3 +398,4 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
 	}
 	return buf.Bytes(), nil
 }
+

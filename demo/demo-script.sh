@@ -380,10 +380,8 @@ say "Apigee's Envoy gateway injects tracing headers on every request."
 say "These headers prove the traffic went through the gateway."
 echo ""
 
-run_and_pause "curl -s ${BASE_URL}/echo/get | python3 -c \
-\"import sys,json; d=json.load(sys.stdin); \
-[print(f'  {k}: {v}') for k,v in d['headers'].items() if 'B3' in k or 'Envoy' in k or 'Cloud' in k]\"" \
-    "Apigee tracing headers on the response:"
+run_and_pause "curl -s ${BASE_URL}/echo/get | python3 -m json.tool" \
+    "Apigee injects tracing headers — visible in the response:"
 
 run_and_pause "curl -s ${BASE_URL}/mock-users/users/1 | python3 -m json.tool" \
     "Mock Users API — real JSON through Apigee proxy:"
