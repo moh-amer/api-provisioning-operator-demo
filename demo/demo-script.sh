@@ -60,6 +60,36 @@ run_and_pause() {
     echo ""
 }
 
+# Like run_and_pause but Ctrl+C only stops the command — NOT the whole script.
+# Use this for: kubectl get -w, kubectl logs -f, watch, etc.
+run_watch() {
+    local cmd="$1"
+    local note="${2:-}"
+    local width=56
+
+    echo ""
+    [[ -n "$note" ]] && echo -e "  ${DIM}${note}${NC}" && echo ""
+
+    echo -e "  ${Y}${BOLD}┌─ Run ─$(printf '─%.0s' $(seq 1 $((width-6))))┐${NC}"
+    echo -e "  ${Y}${BOLD}│${NC}  ${BOLD}\$ ${cmd}${NC}"
+    echo -e "  ${Y}${BOLD}│${NC}  ${DIM}(Ctrl+C to stop watching)${NC}"
+    echo -e "  ${Y}${BOLD}└$(printf '─%.0s' $(seq 1 $((width-1))))┘${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to run ▶${NC}  "
+    read -r
+    echo ""
+
+    # Trap SIGINT so Ctrl+C kills only the child process, not this script
+    trap '' INT
+    eval "$cmd" || true
+    trap - INT
+
+    echo ""
+    echo -en "  ${C}Press ENTER to continue ▶${NC}  "
+    read -r
+    echo ""
+}
+
 # Just a pause between sections
 next() {
     echo ""
@@ -209,7 +239,7 @@ run_step "kubectl delete apigeeapi hello-api --ignore-not-found 2>/dev/null; sle
 run_step "$K apply -f $DEMO_DIR/deploy/examples/hello-api.yaml" \
     "Create the ApigeeAPI custom resource:"
 
-run_and_pause "$K get aapi -w" \
+run_watch "$K get aapi -w" \
     "Watch the phases change in real time (Ctrl+C when Ready):"
 
 section "Check what the operator stored in status"
@@ -336,7 +366,7 @@ run_step "$K apply \
   -f $DEMO_DIR/deploy/examples/google-api.yaml" \
     "Apply 3 CRs at once:"
 
-run_and_pause "$K get aapi -w" \
+run_watch "$K get aapi -w" \
     "Watch all 4 APIs deploy in parallel (Ctrl+C when all Ready):"
 
 section "All 4 APIs — live on Apigee right now"
