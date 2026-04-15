@@ -72,8 +72,17 @@ setup-wif-kind: ## kind cluster ADC auth. Usage: make setup-wif-kind PROJECT=xxx
 	@hack/setup-wif.sh --project $(PROJECT) --kind --namespace $(NAMESPACE)
 
 # ── Kind Cluster ──────────────────────────────────────────────────────────────
+.PHONY: bootstrap-kind
+bootstrap-kind: ## Fresh server setup: Docker + kind + kubectl + cluster + CRDs. Usage: make bootstrap-kind [PROJECT=xxx]
+	@chmod +x hack/bootstrap-kind.sh
+	@hack/bootstrap-kind.sh --cluster-name $(KIND_CLUSTER)
+	@if [[ -n "$(PROJECT)" ]]; then \
+		echo "" && echo "Running auth setup for project $(PROJECT)..." && \
+		hack/setup-auth.sh --project $(PROJECT) --env $(ENV) --namespace $(NAMESPACE); \
+	fi
+
 .PHONY: kind-create
-kind-create: ## Create a local kind cluster
+kind-create: ## Create a local kind cluster (assumes kind is installed)
 	kind get clusters | grep -q $(KIND_CLUSTER) || kind create cluster --name $(KIND_CLUSTER)
 
 .PHONY: kind-load
