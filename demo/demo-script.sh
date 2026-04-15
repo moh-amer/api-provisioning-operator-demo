@@ -283,211 +283,26 @@ run_and_pause "$K get apigeeapi hello-api -o jsonpath='{.status.publicUrl}' && e
 
 section "Live: deduplication in action"
 
-say "Patch the CR twice in rapid succession."
-say "The workqueue deduplicates — you should see ONE syncHandler call, not two."
+say "Two patches fired back-to-back = two events in the informer."
+say "But the workqueue deduplicates — only ONE Apigee API call should happen."
 echo ""
+say "Watch the key insight: the queue stores the KEY (default/hello-api),"
+say "not the object. The second patch overwrites the first in the queue."
+echo ""
+
+run_step "wc -l < /tmp/operator-test.log > /tmp/.dedup-baseline && echo \"Baseline saved: lines before patch = \$(cat /tmp/.dedup-baseline)\"" \
+    "Save a log baseline so we count only new events:"
 
 run_step "kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-1\"}}' \
   && sleep 0.2 \
-  && kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-2\"}}'  " \
-    "Fire two patches back to back:"
+  && kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-2\"}}' " \
+    "Fire two patches in rapid succession:"
 
-run_and_pause "sleep 12 && echo 'Total syncs for hello-api:' && grep -c 'Successfully synced.*hello-api' /tmp/operator-test.log" \
-    "Count of syncHandler calls — expect 1-2 despite 2 events:"
-
-say "The queue collapses duplicates. Whether it's 2 patches or 200, the"
-say "worker only runs once per unique key per drain cycle."
-echo ""
-
-
-
-section "Hit the live API"
-
-say "The proxy is live on Google Cloud Apigee right now."
-say "Traffic: internet → Apigee gateway → httpbin.org"
-echo ""
-
-run_and_pause "curl -s ${BASE_URL}/k8s-demo/get | python3 -m json.tool" \
-    "Real HTTP request through the Apigee proxy we just created:"
-
-next
-
-# =============================================================================
-# CHAPTER 3 — FINALIZERS
-# =============================================================================
-chapter "3" "Finalizers — Guaranteed External Cleanup" "13:00 → 19:00"
-
-say "Built-in K8s resources use OwnerReferences — K8s GC cleans up children."
-say "But Apigee proxies live OUTSIDE Kubernetes."
-say "K8s garbage collector cannot reach cloud resources."
-echo ""
-
-diagram "  Without Finalizer:
-  kubectl delete apigeeapi hello-api
-  → K8s object gone ✓
-  → Apigee proxy still running on GCP! 💸 (orphaned forever)
-
-  With Finalizer:
-  kubectl delete apigeeapi hello-api
-  → K8s sets DeletionTimestamp (object paused)
-  → Operator sees it → calls Apigee REST API:
-      DELETE .../environments/eval/hello-api/deployments
-      DELETE .../organizations/.../apis/hello-api
-  → Removes finalizer → K8s completes deletion ✓"
-
-ask "What happens if the operator crashes DURING the finalizer?"
-
-say "Answer: the reconciliation loop IS the recovery."
-say "Restart → DeletionTimestamp still set → finalizer re-runs."
-say "This is why finalizers MUST be idempotent."
-echo ""
-
-section "Watch a finalizer in action"
-
-run_step "$K get apigeeapi hello-api -o jsonpath='{.metadata.finalizers}' && echo" \
-    "See the finalizer registered on the object:"
-
-run_and_pause "$K delete apigeeapi hello-api" \
-    "Delete the CR — watch it block until Apigee is cleaned up:"
-
-run_and_pause "$K get aapi" \
-    "Confirm the CR is gone:"
-
-next
-
-# =============================================================================
-# CHAPTER 4 — IDEMPOTENCY
-# =============================================================================
-chapter "4" "Idempotency — The Infinite Loop Bug" "19:00 → 23:00"
-
-say "Early version of this operator had a critical bug."
-echo ""
-
-diagram "  syncHandler runs
-  → calls updateStatus()
-  → triggers Update event on the CR
-  → UpdateFunc fires → enqueue()
-  → syncHandler runs again
-  → createProxy() → NEW REVISION on Apigee
-  → updateStatus() → Update event → ...
-
-  Result: 93 revisions created in 3 minutes 🔥"
-
-say "The fix: two mechanisms working together."
-echo ""
-
-diagram "  Fix 1 — UpdateFunc filter:
-    Only re-enqueue if metadata.generation changed
-    Status writes do NOT increment generation
-    → status updates no longer cause re-syncs
-
-  Fix 2 — observedGeneration guard:
-    if phase=Ready AND observedGeneration == generation:
-        return nil   ← skip all Apigee API calls"
-
-section "Prove it's working"
-
-say "Apply the CR, wait for Ready, then watch for 20 seconds."
-say "The revision number should NOT change."
-echo ""
-
-run_step "$K apply -f ./deploy/examples/hello-api.yaml" \
-    "Re-create hello-api:"
-
-run_step "sleep 20 && $K get apigeeapi hello-api -o jsonpath='revision={.status.proxyRevision} observedGen={.status.observedGeneration} gen={.metadata.generation}' && echo" \
-    "After 20s — revision unchanged = idempotency guard working:"
-
-next
-
-# =============================================================================
-# CHAPTER 5 — LIVE SCALE DEMO
-# =============================================================================
-chapter "5" "One Operator — Many APIs" "23:00 → 27:00"
-
-say "One operator binary manages N resources."
-say "No extra configuration per API."
-say "GitOps-ready: each API is a YAML file in your repo."
-echo ""
-
-section "Deploy 3 more APIs simultaneously"
-
-run_step "$K apply \
-  -f ./deploy/examples/echo-api.yaml \
-  -f ./deploy/examples/mock-users-api.yaml \
-  -f ./deploy/examples/google-api.yaml" \
-    "Apply 3 CRs at once:"
-
-run_watch "$K get aapi -w" \
-    "Watch all 4 APIs deploy in parallel (Ctrl+C when all Ready):"
-
-section "All 4 APIs — live on Apigee right now"
-
-run_and_pause "$K get aapi" \
-    "One operator, 4 proxies, all managed declaratively:"
-
-section "The echo-api proves traffic flows through Apigee"
-
-say "Apigee's Envoy gateway injects tracing headers on every request."
-say "These headers prove the traffic went through the gateway."
-echo ""
-
-run_and_pause "curl -s ${BASE_URL}/echo/get | python3 -m json.tool" \
-    "Apigee injects tracing headers — visible in the response:"
-
-run_and_pause "curl -s ${BASE_URL}/mock-users/users/1 | python3 -m json.tool" \
-    "Mock Users API — real JSON through Apigee proxy:"
-
-next
-
-# =============================================================================
-# SUMMARY
-# =============================================================================
-clear
-echo ""
-echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
-echo -e "${C}${BOLD}  Summary                                            ${NC}"
-echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
-echo ""
-
-echo -e "  ${BOLD}1. CRDs${NC}"
-echo -e "  ${DIM}     Extend the Kubernetes API with your own resource types${NC}"
-echo -e "  ${DIM}     Schema validation, RBAC, events — all built in${NC}"
-echo ""
-
-echo -e "  ${BOLD}2. Control Loop${NC}"
-echo -e "  ${DIM}     Observe → Diff → Act — runs forever${NC}"
-echo -e "  ${DIM}     Level-triggered: self-healing without remembering events${NC}"
-echo ""
-
-echo -e "  ${BOLD}3. Finalizers${NC}"
-echo -e "  ${DIM}     Guaranteed cleanup of external resources before K8s deletes${NC}"
-echo -e "  ${DIM}     Used by: cert-manager, Vault, ArgoCD, AWS Controllers...${NC}"
-echo ""
-
-echo -e "  ${BOLD}4. Idempotency${NC}"
-echo -e "  ${DIM}     generation + observedGeneration = your idempotency key${NC}"
-echo -e "  ${DIM}     Every sync must be safe to run N times${NC}"
-echo ""
-
-echo -e "  ${BOLD}5. Scale${NC}"
-echo -e "  ${DIM}     One binary, N resources, GitOps-ready${NC}"
-echo -e "  ${DIM}     Platform team owns the operator. Dev teams own the YAMLs.${NC}"
-echo ""
-
-echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
-echo -e "  ${BOLD}Q&A                                          ⏱  3 min${NC}"
-echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
-echo ""
-
-# =============================================================================
-# CLEANUP OPTION
-# =============================================================================
-echo -en "  ${Y}Delete all demo APIs when done? [y/N] ▶${NC}  "
-read -r CLEANUP
-if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
-    echo ""
-    echo -e "  ${DIM}Running finalizers — cleaning up Apigee resources...${NC}"
-    $K delete apigeeapi --all --ignore-not-found
-    echo -e "  ${G}✓  All demo APIs deleted from Kubernetes and Apigee${NC}"
-fi
-echo ""
+_dedup_check() {
+    local baseline
+    baseline=$(cat /tmp/.dedup-baseline 2>/dev/null || echo 0)
+    echo "=== Apigee API calls triggered by our 2 patches ==="
+    tail -n +"$baseline" /tmp/operator-test.log | grep -E "proxy revision|existing proxy|new proxy" || echo "(none — guard blocked it entirely)"
+}
+run_and_pause "sleep 15 && _dedup_check" \
+    "How many real Apigee API calls happened? (deduplication proof):"
