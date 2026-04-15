@@ -1,694 +1,414 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Kubernetes Operators — Fundamentals Demo
-# Using: Apigee API Operator as the real-world example
-#
-# Audience: SRE & DevOps engineers with solid Kubernetes background
-# Focus:    Core operator concepts — CRDs, Control Loop, Informers,
-#           Workqueue, Finalizers, Idempotency, Level-triggered design
-#
-# Usage:  ./demo/demo-script.sh
-# Config: Set PROJECT and BASE_URL before running
+# Kubernetes Operators — 30-Minute Live Demo
+# For: SRE & DevOps engineers
+# Run: ./demo/demo-script.sh
 # =============================================================================
 set -euo pipefail
 export PATH="${HOME}/.local/bin:${HOME}/bin:/snap/bin:/usr/local/bin:/usr/local/go/bin:${PATH}"
 
-# ── Config ────────────────────────────────────────────────────────────────────
-KUBECTL="${KUBECTL:-kubectl}"
 PROJECT="${PROJECT:-project-710238f0-9aba-4085-903}"
 BASE_URL="${BASE_URL:-https://34.149.73.0.nip.io}"
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+K="${KUBECTL:-kubectl}"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-R='\033[0;31m'  G='\033[0;32m'  Y='\033[1;33m'
-B='\033[0;34m'  C='\033[0;36m'  M='\033[0;35m'
-BOLD='\033[1m'  DIM='\033[2m'   NC='\033[0m'
+R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'
+C='\033[0;36m'; M='\033[0;35m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-type_text() {
-    local text="$1"
-    local delay="${2:-0.03}"
-    echo -en "  "
-    while IFS= read -rn1 char; do
-        echo -en "$char"
-        sleep "$delay"
-    done <<< "$text"
-    echo ""
-}
+# ── Core helpers ──────────────────────────────────────────────────────────────
 
-banner() {
-    local msg="$1"
-    local color="${2:-$C}"
-    local w=58
-    echo ""
-    echo -e "${color}$(printf '═%.0s' $(seq 1 $w))${NC}"
-    printf "${color}${BOLD}  %-$((w-2))s${NC}\n" "$msg"
-    echo -e "${color}$(printf '═%.0s' $(seq 1 $w))${NC}"
-    echo ""
-}
-
-section() {
-    echo ""
-    echo -e "${B}$(printf '─%.0s' $(seq 1 58))${NC}"
-    echo -e "  ${BOLD}${B}$1${NC}"
-    echo -e "${B}$(printf '─%.0s' $(seq 1 58))${NC}"
-    echo ""
-}
-
+# Show a narration point
 say() { echo -e "  ${G}▸  $1${NC}"; }
-idea() { echo -e "  ${Y}💡 $1${NC}"; }
-warn() { echo -e "  ${R}⚠  $1${NC}"; }
-dim()  { echo -e "  ${DIM}$1${NC}"; }
 
+# Show a question for the audience
 ask() {
     echo ""
     echo -e "  ${M}${BOLD}❓  $1${NC}"
     echo ""
+    sleep 0.5
 }
 
-run() {
-    echo ""
-    echo -e "  ${BOLD}\$ $*${NC}"
-    echo ""
-    eval "$@"
-    echo ""
-}
+# Show command, wait for ENTER, then run it
+run_step() {
+    local cmd="$1"
+    local note="${2:-}"
+    local width=56
 
-pause() {
-    local msg="${1:-Press ENTER to continue}"
     echo ""
-    echo -e "  ${C}┌──────────────────────────────────────────────────┐${NC}"
-    printf  "  ${C}│  %-48s│${NC}\n" "$msg"
-    echo -e "  ${C}└──────────────────────────────────────────────────┘${NC}"
+    [[ -n "$note" ]] && echo -e "  ${DIM}${note}${NC}" && echo ""
+
+    # Command box
+    echo -e "  ${Y}${BOLD}┌─ Run ─$(printf '─%.0s' $(seq 1 $((width-6))))┐${NC}"
+    echo -e "  ${Y}${BOLD}│${NC}  ${BOLD}\$ ${cmd}${NC}"
+    echo -e "  ${Y}${BOLD}└$(printf '─%.0s' $(seq 1 $((width-1))))┘${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to run ▶${NC}  "
     read -r
-}
-
-pause_ask() {
     echo ""
-    echo -e "  ${M}┌──────────────────────────────────────────────────┐${NC}"
-    printf  "  ${M}│  %-48s│${NC}\n" "❓ $1"
-    echo -e "  ${M}│  (take answers, then press ENTER)                │${NC}"
-    echo -e "  ${M}└──────────────────────────────────────────────────┘${NC}"
-    read -r
+    eval "$cmd"
+    echo ""
 }
 
-check() { echo -e "  ${G}✓  ${BOLD}$1${NC}"; }
-fail()  { echo -e "  ${R}✗  $1${NC}"; }
+# Show command, wait for ENTER, run it, then wait again for you to comment
+run_and_pause() {
+    local cmd="$1"
+    local note="${2:-}"
+    run_step "$cmd" "$note"
+    echo -en "  ${C}Press ENTER to continue ▶${NC}  "
+    read -r
+    echo ""
+}
 
+# Just a pause between sections
+next() {
+    echo ""
+    echo -e "  ${C}$(printf '·%.0s' $(seq 1 54))${NC}"
+    echo -en "  ${C}Press ENTER for next section ▶${NC}  "
+    read -r
+    clear
+}
+
+# Section banner
+section() {
+    local title="$1"
+    local timer="${2:-}"
+    echo ""
+    echo -e "${B}$(printf '━%.0s' $(seq 1 58))${NC}"
+    if [[ -n "$timer" ]]; then
+        printf "${B}${BOLD}  %-48s${Y}%6s${NC}\n" "$title" "$timer"
+    else
+        echo -e "  ${B}${BOLD}$title${NC}"
+    fi
+    echo -e "${B}$(printf '━%.0s' $(seq 1 58))${NC}"
+    echo ""
+}
+
+# Big chapter header
+chapter() {
+    local num="$1"
+    local title="$2"
+    local timer="${3:-}"
+    clear
+    echo ""
+    echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
+    printf "${C}${BOLD}  %s — %-40s${NC}\n" "$num" "$title"
+    [[ -n "$timer" ]] && printf "${DIM}  %-54s${NC}\n" "⏱  $timer"
+    echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
+    echo ""
+}
+
+# Inline diagram
+diagram() {
+    echo ""
+    echo -e "${DIM}$1${NC}"
+    echo ""
+}
+
+# =============================================================================
+# INTRO
 # =============================================================================
 clear
-banner "Kubernetes Operators: Core Concepts" "$M"
-
-echo -e "  ${DIM}A hands-on session for SRE & DevOps engineers${NC}"
-echo -e "  ${DIM}Example: The Apigee API Operator — a real production use case${NC}"
 echo ""
-echo -e "  Agenda:"
-dim "   1. The Problem Operators Solve"
-dim "   2. CRDs — Extending the Kubernetes API"
-dim "   3. The Control Loop — The Heart of Every Operator"
-dim "   4. Informers & The Workqueue — How Operators Watch Efficiently"
-dim "   5. Finalizers — Guaranteed Cleanup of External State"
-dim "   6. Idempotency & Level-Triggered Design"
-dim "   7. Live: Operator at Scale"
-dim "   8. Impact & GitOps Integration"
+echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
+echo -e "${C}${BOLD}  Kubernetes Operators — Live Demo                   ${NC}"
+echo -e "${DIM}  30 min  •  SRE & DevOps session                    ${NC}"
+echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
 echo ""
-
-pause "Start the session"
-
-# =============================================================================
-# CHAPTER 1 — THE PROBLEM
-# =============================================================================
+echo -e "  ${BOLD}Agenda:${NC}"
+echo -e "  ${DIM}1. What is an Operator? — CRDs (5 min)${NC}"
+echo -e "  ${DIM}2. The Control Loop (8 min)${NC}"
+echo -e "  ${DIM}3. Finalizers — External Cleanup (6 min)${NC}"
+echo -e "  ${DIM}4. Idempotency (4 min)${NC}"
+echo -e "  ${DIM}5. Live Scale Demo (4 min)${NC}"
+echo -e "  ${DIM}6. Q&A (3 min)${NC}"
+echo ""
+echo -en "  ${C}Press ENTER to start ▶${NC}  "
+read -r
 clear
-banner "Chapter 1: The Problem Operators Solve" "$Y"
-
-section "What are we replacing?"
-
-say "Before this operator, provisioning an API on Apigee looked like this:"
-echo ""
-
-dim "   # Step 1: Create the proxy bundle"
-dim "   zip -r my-api.zip apiproxy/"
-dim ""
-dim "   # Step 2: Upload to Apigee"
-dim "   curl -X POST https://apigee.googleapis.com/v1/organizations/\$ORG/apis \\"
-dim "     -H 'Authorization: Bearer \$(gcloud auth print-access-token)' \\"
-dim "     -F 'file=@my-api.zip'"
-dim ""
-dim "   # Step 3: Get the revision number from the response"
-dim "   # Step 4: Deploy the revision"
-dim "   curl -X POST .../environments/eval/apis/my-api/revisions/1/deployments"
-dim ""
-dim "   # Step 5: Verify. Step 6: Document. Step 7: Hope nobody deletes it."
-echo ""
-
-warn "This is a runbook. And runbooks get run at 3am, by tired people, inconsistently."
-echo ""
-
-pause_ask "How many of you have a runbook that looks like this for some system you operate?"
-
-section "The operator pattern — encoding the runbook"
-
-say "An Operator is your runbook compiled into a control loop."
-say "It runs 24/7, never gets tired, never skips steps."
-echo ""
-
-echo -e "  ${BOLD}Operator = Domain Knowledge + Kubernetes API${NC}"
-echo ""
-echo -e "  ${DIM}\"Operator\" was coined by CoreOS in 2016.${NC}"
-echo -e "  ${DIM}Today: 300+ operators on OperatorHub.io${NC}"
-echo -e "  ${DIM}Used by: cert-manager, ArgoCD, Prometheus, Strimzi, Vault...${NC}"
-echo ""
-
-pause
 
 # =============================================================================
-# CHAPTER 2 — CRDs
+# CHAPTER 1 — WHAT IS AN OPERATOR? CRDs
 # =============================================================================
-clear
-banner "Chapter 2: CRDs — Extending the Kubernetes API" "$C"
+chapter "1" "What is an Operator?" "0:00 → 5:00"
 
-section "What is a CRD?"
-
-say "Kubernetes ships with built-in resource types: Pod, Deployment, Service..."
-say "CRDs let you add your OWN resource types to the Kubernetes API."
-say "They're not just config files — they become FIRST-CLASS API citizens."
+say "An Operator = Domain Knowledge + Kubernetes Control Loop"
+say "It encodes your runbook into software that runs 24/7."
 echo ""
 
-pause_ask "What's the difference between a CRD and a ConfigMap?"
+diagram "  Without operator:                 With operator:
+  ─────────────────────────────     ────────────────────────────
+  \$ gcloud apigee apis create...    \$ kubectl apply -f api.yaml
+  \$ gcloud ... revisions deploy     → proxy created ✓
+  \$ verify... document... hope...   → deployed ✓
+                                    → status updated ✓
+  (6 commands, 15 min, at 3am)      (1 YAML, 15 seconds, always)"
 
-section "Our CRD: ApigeeAPI"
+ask "How many of you have a runbook that you wish was automated?"
 
-say "We extended Kubernetes with a new resource that describes an Apigee API proxy."
-run "$KUBECTL get crd apigeeapis.apigee.example.com"
+section "CRDs: Your own resource types in Kubernetes"
 
-say "It has a shortname, printer columns, validation — just like built-in resources:"
-run "$KUBECTL api-resources | grep apigee"
-
-section "The CRD schema enforces correctness at the API layer"
-
-say "The spec has validation rules baked into the schema:"
-echo ""
-dim "   basePath:"
-dim "     pattern: '^/.*'          ← MUST start with /"
-dim "   targetUrl:"
-dim "     pattern: '^https?://.*'  ← MUST be a valid URL"
-dim "   organization, environment, basePath, targetUrl:"
-dim "     required: [...]           ← CANNOT be omitted"
+say "CRDs let you add custom resources to the Kubernetes API."
+say "They're not ConfigMaps — they're first-class API objects."
+say "With schema validation, printer columns, RBAC, events."
 echo ""
 
-say "Try applying an invalid CR:"
-echo ""
-echo -e "  ${BOLD}\$ kubectl apply -f - <<EOF${NC}"
-echo "  apiVersion: apigee.example.com/v1alpha1"
-echo "  kind: ApigeeAPI"
-echo "  metadata:"
-echo "    name: invalid-test"
-echo "  spec:"
-echo "    organization: \"my-org\""
-echo "    environment: \"eval\""
-echo "    basePath: \"no-leading-slash\"   # ← INVALID"
-echo "    targetUrl: \"not-a-url\"          # ← INVALID"
-echo -e "  EOF"
+run_and_pause "$K get crd apigeeapis.apigee.example.com" \
+    "Our CRD is registered as a real Kubernetes API resource:"
+
+run_and_pause "$K api-resources | grep apigee" \
+    "Short name 'aapi' — works exactly like pod, deploy, svc:"
+
+section "CRDs enforce correctness at the API layer"
+
+say "Invalid input is rejected BEFORE the controller even sees it."
 echo ""
 
-$KUBECTL apply -f - 2>&1 <<'EOF' || true
-apiVersion: apigee.example.com/v1alpha1
-kind: ApigeeAPI
-metadata:
-  name: invalid-test
-  namespace: default
-spec:
-  organization: "my-org"
-  environment: "eval"
-  basePath: "no-leading-slash"
-  targetUrl: "not-a-url"
-EOF
-echo ""
+run_and_pause "cat $DEMO_DIR/deploy/examples/hello-api.yaml" \
+    "This is ALL you write to manage an Apigee API proxy:"
 
-idea "The API server rejected it — the controller never even saw it."
-idea "This is validation at the API layer, not in your application code."
-
-pause
+next
 
 # =============================================================================
-# CHAPTER 3 — THE CONTROL LOOP
+# CHAPTER 2 — THE CONTROL LOOP
 # =============================================================================
-clear
-banner "Chapter 3: The Control Loop" "$G"
+chapter "2" "The Control Loop" "5:00 → 13:00"
 
-section "The fundamental pattern"
+diagram "  THE CONTROL LOOP — every operator runs this forever:
 
-say "Every Kubernetes controller — including operators — runs one loop:"
+  ┌──────────┐    ┌───────────────┐    ┌──────────┐
+  │ OBSERVE  │───▶│     DIFF      │───▶│   ACT    │
+  │          │    │               │    │          │
+  │ Read CR  │    │ Desired state │    │ Call     │
+  │ from K8s │    │ minus current │    │ Apigee   │
+  │ cache    │    │ = what to do  │    │ REST API │
+  └──────────┘    └───────────────┘    └──────────┘
+        ▲                                    │
+        └────────────────────────────────────┘
+                    (forever)"
+
+say "This is not new. Your thermostat works this way."
+say "PID controllers in aerospace. systemd unit restarts."
+say "Kubernetes just applied it to infrastructure."
 echo ""
 
-echo -e "${BOLD}"
-cat << 'LOOP'
-  ┌─────────────────────────────────────────────────────┐
-  │                  THE CONTROL LOOP                   │
-  │                                                     │
-  │   ┌──────────┐    ┌──────────┐    ┌──────────┐     │
-  │   │ OBSERVE  │───▶│   DIFF   │───▶│   ACT    │     │
-  │   │          │    │          │    │          │     │
-  │   │ What is  │    │ Desired  │    │ Make it  │     │
-  │   │ the      │    │  minus   │    │ so.      │     │
-  │   │ current  │    │ Actual   │    │          │     │
-  │   │ state?   │    │ = delta  │    │          │     │
-  │   └──────────┘    └──────────┘    └──────────┘     │
-  │         ▲                                │          │
-  │         └────────────────────────────────┘          │
-  │                   repeat forever                    │
-  └─────────────────────────────────────────────────────┘
-LOOP
-echo -e "${NC}"
+ask "What's the difference between this and a webhook or event listener?"
 
-say "This is NOT new. PID controllers in aerospace. Thermostat in your house."
-say "Kubernetes just applied it to infrastructure management."
+say "Webhooks are EDGE-triggered: miss an event = miss the action."
+say "Control loops are LEVEL-triggered: always comparing state."
+say "This is why Kubernetes self-heals."
+
+section "Watch the loop run — apply a CR"
+
+say "Apply the CR. Watch: Finalizer → Creating → Deploying → Ready"
 echo ""
 
-pause_ask "Can anyone name a system they run that works like a control loop?"
+run_step "kubectl delete apigeeapi hello-api --ignore-not-found 2>/dev/null; sleep 1" \
+    "Clean slate first:"
 
-section "Our operator's control loop — made concrete"
+run_step "$K apply -f $DEMO_DIR/deploy/examples/hello-api.yaml" \
+    "Create the ApigeeAPI custom resource:"
 
-echo ""
-echo -e "${DIM}"
-cat << 'CONCRETE'
-  OBSERVE:  Read ApigeeAPI CR from K8s cache
-                │
-                ▼
-  DIFF:     Does the proxy exist on Apigee?
-            Is the right revision deployed?
-            Is observedGeneration == generation?
-                │
-                ├── All good → return nil (nothing to do)
-                │
-                └── Delta found → ACT:
-                      Upload proxy bundle to Apigee REST API
-                      Deploy revision to environment
-                      Update status.phase = "Ready"
-                      Stamp observedGeneration
-CONCRETE
-echo -e "${NC}"
+run_and_pause "$K get aapi -w" \
+    "Watch the phases change in real time (Ctrl+C when Ready):"
 
-section "Watch the loop run right now"
+section "Check what the operator stored in status"
 
-say "Apply a CR and watch each phase of the loop execute:"
+run_and_pause "$K describe apigeeapi hello-api" \
+    "Full status, events, and conditions:"
+
+run_and_pause "$K get apigeeapi hello-api -o jsonpath='{.status.publicUrl}' && echo" \
+    "The live public URL:"
+
+section "Hit the live API"
+
+say "The proxy is live on Google Cloud Apigee right now."
+say "Traffic: internet → Apigee gateway → httpbin.org"
 echo ""
 
-$KUBECTL delete apigeeapi loop-demo --ignore-not-found 2>/dev/null || true
-sleep 1
+run_and_pause "curl -s ${BASE_URL}/k8s-demo/get | python3 -m json.tool" \
+    "Real HTTP request through the Apigee proxy we just created:"
 
-$KUBECTL apply -f - 2>/dev/null << EOF
-apiVersion: apigee.example.com/v1alpha1
-kind: ApigeeAPI
-metadata:
-  name: loop-demo
-  namespace: default
-spec:
-  organization: "${PROJECT}"
-  environment: "eval"
-  basePath: "/loop-demo"
-  targetUrl: "https://httpbin.org"
-  description: "Control loop live demo"
-EOF
-
-echo -e "  ${C}Watching phases... (Ctrl+C when Ready)${NC}"
-echo ""
-timeout 60 $KUBECTL get aapi loop-demo -w 2>/dev/null || true
-echo ""
-
-say "You just watched: Adding finalizer → Creating → Deploying → Ready"
-say "Each transition is a separate iteration of the control loop."
-
-pause
+next
 
 # =============================================================================
-# CHAPTER 4 — INFORMERS & WORKQUEUE
+# CHAPTER 3 — FINALIZERS
 # =============================================================================
-clear
-banner "Chapter 4: Informers & The Workqueue" "$B"
+chapter "3" "Finalizers — Guaranteed External Cleanup" "13:00 → 19:00"
 
-section "The naive approach — and why it fails at scale"
-
-say "The obvious way to watch for changes: poll the API server."
-echo ""
-dim "   for { resources := kubectl.List(ApigeeAPIs); reconcile(resources); sleep(5) }"
+say "Built-in K8s resources use OwnerReferences — K8s GC cleans up children."
+say "But Apigee proxies live OUTSIDE Kubernetes."
+say "K8s garbage collector cannot reach cloud resources."
 echo ""
 
-warn "Poll 1000 resources every 5 seconds = 200 requests/sec to the API server."
-warn "Kubernetes API server would fall over. NOT how operators work."
-echo ""
-
-section "Informers — List once, watch forever"
-
-say "Informers use the Kubernetes Watch API:"
-echo ""
-
-echo -e "${DIM}"
-cat << 'INFORMER'
-  Start-up:
-    kubectl.List(ApigeeAPIs)    ← One request, populates local cache
-         │
-         ▼
-  Watch loop:
-    kubectl.Watch(ApigeeAPIs)   ← One persistent TCP connection
-         │
-         ├── Event: ADDED    → enqueue "default/hello-api"
-         ├── Event: MODIFIED → enqueue "default/hello-api" (if gen changed)
-         ├── Event: DELETED  → (finalizer blocks actual delete)
-         └── Event: resync   → periodic re-check (every 30s)
-
-  Result: Zero polling. One connection. Local cache served instantly.
-INFORMER
-echo -e "${NC}"
-idea "The operator reads from a LOCAL CACHE, not the API server."
-idea "Writing still goes to the API server — reads are free."
-echo ""
-
-section "The Workqueue — rate limiting & deduplication"
-
-say "Events go into a rate-limited, deduplicated queue:"
-echo ""
-
-echo -e "${DIM}"
-cat << 'QUEUE'
-  Event: hello-api MODIFIED
-  Event: hello-api MODIFIED   ← same key, deduplicated → only 1 sync
-  Event: echo-api  ADDED
-
-  Workqueue: [ "default/hello-api", "default/echo-api" ]
-             (processed by N worker goroutines in parallel)
-
-  On failure: exponential backoff before retry (5ms → 10ms → 20ms → ... → 1000s)
-  On success: item removed from queue
-QUEUE
-echo -e "${NC}"
-
-say "This is why operators handle thundering herds gracefully."
-say "Flood of events → deduped → single sync per object."
-
-run "$KUBECTL get aapi"
-
-pause
-
-# =============================================================================
-# CHAPTER 5 — FINALIZERS
-# =============================================================================
-clear
-banner "Chapter 5: Finalizers — Guaranteed External Cleanup" "$R"
-
-section "The problem: external resources can't be garbage-collected by K8s"
-
-say "Built-in K8s resources use OwnerReferences for cascading deletes."
-say "Kubernetes GC deletes children when the parent is deleted."
-say "But Apigee proxies, AWS S3 buckets, DNS records, TLS certs..."
-echo ""
-
-warn "They live OUTSIDE Kubernetes. K8s GC cannot reach them."
-warn "Without protection: delete the CR → Kubernetes object gone → Apigee proxy orphaned forever."
-echo ""
-
-section "Finalizers — a 'hold' on deletion"
-
-echo -e "${DIM}"
-cat << 'FINALIZER'
+diagram "  Without Finalizer:
   kubectl delete apigeeapi hello-api
-       │
-       ▼
-  K8s sets: metadata.deletionTimestamp = "now"
-  K8s sees: metadata.finalizers = ["apigee.example.com/cleanup"]
-  K8s says: "I can't delete yet. Something has a hold."
-       │
-       ▼ (operator's UpdateFunc fires — DeletionTimestamp is set)
-       │
-  Operator runs finalizer:
-     1. Apigee REST: DELETE .../revisions/N/deployments  (undeploy)
-     2. Apigee REST: DELETE .../apis/hello-api            (delete proxy)
-     3. K8s: PATCH metadata.finalizers = []              (release hold)
-       │
-       ▼
-  K8s: "No more finalizers. Permanently deleting." ✓
-FINALIZER
-echo -e "${NC}"
+  → K8s object gone ✓
+  → Apigee proxy still running on GCP! 💸 (orphaned forever)
 
-idea "Finalizers are how ALL production operators handle external state."
-idea "cert-manager uses them for TLS certs. Vault operator for secrets. ArgoCD for apps."
+  With Finalizer:
+  kubectl delete apigeeapi hello-api
+  → K8s sets DeletionTimestamp (object paused)
+  → Operator sees it → calls Apigee REST API:
+      DELETE .../environments/eval/hello-api/deployments
+      DELETE .../organizations/.../apis/hello-api
+  → Removes finalizer → K8s completes deletion ✓"
+
+ask "What happens if the operator crashes DURING the finalizer?"
+
+say "Answer: the reconciliation loop IS the recovery."
+say "Restart → DeletionTimestamp still set → finalizer re-runs."
+say "This is why finalizers MUST be idempotent."
 echo ""
 
 section "Watch a finalizer in action"
 
-say "Check current finalizer on an existing CR:"
-run "$KUBECTL get apigeeapi echo-api -o jsonpath='{.metadata.finalizers}' && echo"
+run_step "$K get apigeeapi hello-api -o jsonpath='{.metadata.finalizers}' && echo" \
+    "See the finalizer registered on the object:"
 
-say "Now delete it — watch the finalizer run:"
-run "$KUBECTL delete apigeeapi loop-demo"
+run_and_pause "$K delete apigeeapi hello-api" \
+    "Delete the CR — watch it block until Apigee is cleaned up:"
 
-say "The delete blocked until the operator cleaned up Apigee, then completed."
-echo ""
+run_and_pause "$K get aapi" \
+    "Confirm the CR is gone:"
 
-pause_ask "What happens if the operator crashes mid-finalizer? What's your recovery strategy?"
-
-say "Answer: The reconciliation loop IS the recovery."
-say "When the operator restarts, it sees DeletionTimestamp still set."
-say "It re-runs the finalizer — which must therefore be IDEMPOTENT."
-
-pause
+next
 
 # =============================================================================
-# CHAPTER 6 — IDEMPOTENCY & LEVEL-TRIGGERED DESIGN
+# CHAPTER 4 — IDEMPOTENCY
+# =============================================================================
+chapter "4" "Idempotency — The Infinite Loop Bug" "19:00 → 23:00"
+
+say "Early version of this operator had a critical bug."
+echo ""
+
+diagram "  syncHandler runs
+  → calls updateStatus()
+  → triggers Update event on the CR
+  → UpdateFunc fires → enqueue()
+  → syncHandler runs again
+  → createProxy() → NEW REVISION on Apigee
+  → updateStatus() → Update event → ...
+
+  Result: 93 revisions created in 3 minutes 🔥"
+
+say "The fix: two mechanisms working together."
+echo ""
+
+diagram "  Fix 1 — UpdateFunc filter:
+    Only re-enqueue if metadata.generation changed
+    Status writes do NOT increment generation
+    → status updates no longer cause re-syncs
+
+  Fix 2 — observedGeneration guard:
+    if phase=Ready AND observedGeneration == generation:
+        return nil   ← skip all Apigee API calls"
+
+section "Prove it's working"
+
+say "Apply the CR, wait for Ready, then watch for 20 seconds."
+say "The revision number should NOT change."
+echo ""
+
+run_step "$K apply -f $DEMO_DIR/deploy/examples/hello-api.yaml" \
+    "Re-create hello-api:"
+
+run_step "sleep 20 && $K get apigeeapi hello-api -o jsonpath='revision={.status.proxyRevision} observedGen={.status.observedGeneration} gen={.metadata.generation}' && echo" \
+    "After 20s — revision unchanged = idempotency guard working:"
+
+next
+
+# =============================================================================
+# CHAPTER 5 — LIVE SCALE DEMO
+# =============================================================================
+chapter "5" "One Operator — Many APIs" "23:00 → 27:00"
+
+say "One operator binary manages N resources."
+say "No extra configuration per API."
+say "GitOps-ready: each API is a YAML file in your repo."
+echo ""
+
+section "Deploy 3 more APIs simultaneously"
+
+run_step "$K apply \
+  -f $DEMO_DIR/deploy/examples/echo-api.yaml \
+  -f $DEMO_DIR/deploy/examples/mock-users-api.yaml \
+  -f $DEMO_DIR/deploy/examples/google-api.yaml" \
+    "Apply 3 CRs at once:"
+
+run_and_pause "$K get aapi -w" \
+    "Watch all 4 APIs deploy in parallel (Ctrl+C when all Ready):"
+
+section "All 4 APIs — live on Apigee right now"
+
+run_and_pause "$K get aapi" \
+    "One operator, 4 proxies, all managed declaratively:"
+
+section "The echo-api proves traffic flows through Apigee"
+
+say "Apigee's Envoy gateway injects tracing headers on every request."
+say "These headers prove the traffic went through the gateway."
+echo ""
+
+run_and_pause "curl -s ${BASE_URL}/echo/get | python3 -c \
+\"import sys,json; d=json.load(sys.stdin); \
+[print(f'  {k}: {v}') for k,v in d['headers'].items() if 'B3' in k or 'Envoy' in k or 'Cloud' in k]\"" \
+    "Apigee tracing headers on the response:"
+
+run_and_pause "curl -s ${BASE_URL}/mock-users/users/1 | python3 -m json.tool" \
+    "Mock Users API — real JSON through Apigee proxy:"
+
+next
+
+# =============================================================================
+# SUMMARY
 # =============================================================================
 clear
-banner "Chapter 6: Idempotency & Level-Triggered Design" "$M"
-
-section "Level-triggered vs Edge-triggered"
-
-say "SREs know this from alerting systems. Kubernetes uses the same model."
+echo ""
+echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
+echo -e "${C}${BOLD}  Summary                                            ${NC}"
+echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
 echo ""
 
-echo -e "${DIM}"
-cat << 'LEVEL'
-  EDGE-TRIGGERED  (webhooks, event streams):
-    "Notify me when state changes"
-    Problem: Miss an event = miss the action. No recovery.
-
-  LEVEL-TRIGGERED (Kubernetes control loops):
-    "Continuously check: is the current state = desired state?"
-    Problem: None — every loop iteration is a full correctness check.
-    Recovery: Automatic. Restart the operator → it re-syncs.
-LEVEL
-echo -e "${NC}"
-
-idea "This is why Kubernetes is self-healing. It doesn't remember events."
-idea "It only knows desired state and current state."
+echo -e "  ${BOLD}1. CRDs${NC}"
+echo -e "  ${DIM}     Extend the Kubernetes API with your own resource types${NC}"
+echo -e "  ${DIM}     Schema validation, RBAC, events — all built in${NC}"
 echo ""
 
-section "The idempotency contract"
-
-say "Every sync must produce the same result no matter how many times it runs."
-say "Our operator enforces this with two mechanisms:"
+echo -e "  ${BOLD}2. Control Loop${NC}"
+echo -e "  ${DIM}     Observe → Diff → Act — runs forever${NC}"
+echo -e "  ${DIM}     Level-triggered: self-healing without remembering events${NC}"
 echo ""
 
-echo -e "${DIM}"
-cat << 'IDEM'
-  1. UpdateFunc filter:
-     Only re-enqueue if metadata.generation changed (spec changed)
-     Status updates do NOT increment generation → no spurious syncs
-
-  2. observedGeneration guard:
-     if status.phase == "Ready" &&
-        status.observedGeneration == metadata.generation {
-         return nil  // Already reconciled — skip Apigee API calls
-     }
-
-  Early versions of this operator created 93 revisions in 3 minutes.
-  This is the fix.
-IDEM
-echo -e "${NC}"
-
-section "Live proof: operator is silent when nothing changed"
-
-BEFORE_REV=$($KUBECTL get apigeeapi hello-api -o jsonpath='{.status.proxyRevision}' 2>/dev/null || echo "?")
-say "Current revision on hello-api: ${BOLD}$BEFORE_REV"
-echo ""
-say "Waiting 20 seconds (30s resync will fire in this window)..."
-sleep 20
-
-AFTER_REV=$($KUBECTL get apigeeapi hello-api -o jsonpath='{.status.proxyRevision}' 2>/dev/null || echo "?")
-say "Revision after 20s:            ${BOLD}$AFTER_REV"
+echo -e "  ${BOLD}3. Finalizers${NC}"
+echo -e "  ${DIM}     Guaranteed cleanup of external resources before K8s deletes${NC}"
+echo -e "  ${DIM}     Used by: cert-manager, Vault, ArgoCD, AWS Controllers...${NC}"
 echo ""
 
-if [[ "$BEFORE_REV" == "$AFTER_REV" ]]; then
-    check "Revision unchanged. The resync fired but the guard prevented any Apigee call."
-else
-    fail "Revision changed — check the idempotency guard."
+echo -e "  ${BOLD}4. Idempotency${NC}"
+echo -e "  ${DIM}     generation + observedGeneration = your idempotency key${NC}"
+echo -e "  ${DIM}     Every sync must be safe to run N times${NC}"
+echo ""
+
+echo -e "  ${BOLD}5. Scale${NC}"
+echo -e "  ${DIM}     One binary, N resources, GitOps-ready${NC}"
+echo -e "  ${DIM}     Platform team owns the operator. Dev teams own the YAMLs.${NC}"
+echo ""
+
+echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
+echo -e "  ${BOLD}Q&A                                          ⏱  3 min${NC}"
+echo -e "${C}$(printf '═%.0s' $(seq 1 58))${NC}"
+echo ""
+
+# =============================================================================
+# CLEANUP OPTION
+# =============================================================================
+echo -en "  ${Y}Delete all demo APIs when done? [y/N] ▶${NC}  "
+read -r CLEANUP
+if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
+    echo ""
+    echo -e "  ${DIM}Running finalizers — cleaning up Apigee resources...${NC}"
+    $K delete apigeeapi --all --ignore-not-found
+    echo -e "  ${G}✓  All demo APIs deleted from Kubernetes and Apigee${NC}"
 fi
-
-pause
-
-# =============================================================================
-# CHAPTER 7 — LIVE DEMO: OPERATOR AT SCALE
-# =============================================================================
-clear
-banner "Chapter 7: Live — Operator at Scale" "$G"
-
-section "Managing 4 APIs simultaneously"
-
-say "This is where operators show their real value."
-say "One operator binary manages N resources with zero extra configuration."
-echo ""
-
-run "$KUBECTL get aapi"
-
-section "All 4 APIs — live and accessible"
-
-echo ""
-echo -e "  ${BOLD}Testing each endpoint:${NC}"
-echo ""
-for API in hello-api echo-api mock-users-api google-api; do
-    URL=$($KUBECTL get apigeeapi $API -o jsonpath='{.status.publicUrl}' 2>/dev/null || echo "")
-    PHASE=$($KUBECTL get apigeeapi $API -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
-    if [[ -n "$URL" && "$PHASE" == "Ready" ]]; then
-        TEST_PATH="/get"
-        [[ "$API" == "mock-users-api" ]] && TEST_PATH="/users/1"
-        [[ "$API" == "google-api" ]] && TEST_PATH=""
-        CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "${URL}${TEST_PATH}" 2>/dev/null || echo "ERR")
-        if [[ "$CODE" =~ ^2|^3 ]]; then
-            check "$API → ${URL}${TEST_PATH}  [HTTP $CODE]"
-        else
-            fail "$API → ${URL}${TEST_PATH}  [HTTP $CODE]"
-        fi
-    else
-        echo -e "  ${Y}⟳  $API → phase=$PHASE${NC}"
-    fi
-done
-echo ""
-
-section "The echo-api shows Apigee is really in the path"
-
-say "Every request through Apigee gets Envoy tracing headers injected:"
-echo ""
-ECHO_URL=$($KUBECTL get apigeeapi echo-api -o jsonpath='{.status.publicUrl}' 2>/dev/null || echo "$BASE_URL/echo")
-echo -e "  ${BOLD}\$ curl -s ${ECHO_URL}/get | python3 -m json.tool${NC}"
-echo ""
-curl -s "${ECHO_URL}/get" 2>/dev/null | python3 -c "
-import sys, json
-d = json.load(sys.stdin)
-apigee_headers = {k: v for k, v in d.get('headers', {}).items()
-                  if any(x in k for x in ['X-B3', 'X-Envoy', 'X-Cloud'])}
-print('  Apigee-injected headers:')
-for k, v in apigee_headers.items():
-    print(f'    {k}: {v}')
-print()
-print(f'  origin: {d.get(\"origin\", \"?\")}')
-print('  (shows the Apigee gateway IP in the chain)')
-" 2>/dev/null || echo "  [Could not parse response]"
-echo ""
-
-idea "X-B3-Traceid, X-Envoy-Attempt-Count — these prove traffic flows through Apigee's Envoy gateway."
-idea "This is observable, distributed-tracing-compatible API management — driven by a YAML in K8s."
-
-pause
-
-# =============================================================================
-# CHAPTER 8 — IMPACT & GITOPS
-# =============================================================================
-clear
-banner "Chapter 8: Impact & GitOps Integration" "$Y"
-
-section "What this unlocks for your team"
-
-echo ""
-echo -e "  ${BOLD}Before the operator:${NC}"
-dim "   • API provisioning: 6 CLI commands, 1 runbook, ~15 min"
-dim "   • Requires Apigee console access for every developer"
-dim "   • No audit trail — who deployed what, when?"
-dim "   • Inconsistent across environments (dev/staging/prod)"
-dim "   • Can't be reviewed, approved, or rolled back"
-echo ""
-
-echo -e "  ${BOLD}After the operator:${NC}"
-echo -e "  ${G}  • API provisioning: 1 YAML file, kubectl apply, ~15 seconds${NC}"
-echo -e "  ${G}  • No Apigee console access needed${NC}"
-echo -e "  ${G}  • Full audit trail: git history, kubectl events, status conditions${NC}"
-echo -e "  ${G}  • Identical process for every environment${NC}"
-echo -e "  ${G}  • PR review, approval gates, automated rollback${NC}"
-echo ""
-
-section "The GitOps model"
-
-echo -e "${DIM}"
-cat << 'GITOPS'
-  Developer submits PR:
-    ─ deploy/apis/payment-api.yaml  (new ApigeeAPI CR)
-
-  Reviewer approves:
-    ─ Code review on the YAML spec
-    ─ Same workflow as reviewing application code
-
-  Merge to main → ArgoCD / Flux syncs → kubectl apply
-    → Operator creates proxy on Apigee
-    → Status written back to K8s: phase=Ready, url=...
-
-  Want to promote to prod?
-    kubectl apply -f deploy/apis/payment-api.yaml \
-      --dry-run=server    ← preview
-    # Change environment: "eval" → "prod" → merge to prod branch
-GITOPS
-echo -e "${NC}"
-
-section "What the operator encodes (from our project)"
-
-say "In the project that inspired this, the operator provisions:"
-echo ""
-dim "   • API proxies per microservice team — self-service"
-dim "   • Per-tenant Apigee environments on provisioning"
-dim "   • Automated cleanup when a tenant is offboarded"
-dim "   • The same workflow across 3 environments: dev, staging, prod"
-echo ""
-
-idea "The operator is the contract between: Platform Team and Product Team."
-idea "Platform owns the operator. Product teams own the YAMLs."
-
-pause
-
-# =============================================================================
-# SUMMARY & Q&A
-# =============================================================================
-clear
-banner "Summary: Core Operator Concepts" "$C"
-
-echo ""
-echo -e "  ${BOLD}1. CRDs — Extending the API${NC}"
-dim "     Your domain language becomes a first-class Kubernetes resource type."
-dim "     Validation, RBAC, events, status — all built-in."
-echo ""
-
-echo -e "  ${BOLD}2. Control Loop — Observe → Diff → Act${NC}"
-dim "     Not a daemon. Not a webhook. A reconciliation loop."
-dim "     Self-healing because it checks state, not reacts to events."
-echo ""
-
-echo -e "  ${BOLD}3. Informers & Workqueue${NC}"
-dim "     List once, watch forever. Local cache. Zero polling."
-dim "     Rate-limited, deduplicated queue. Handles thundering herds."
-echo ""
-
-echo -e "  ${BOLD}4. Finalizers${NC}"
-dim "     Guaranteed cleanup of external state before K8s deletes the CR."
-dim "     Used by every production operator that touches external systems."
-echo ""
-
-echo -e "  ${BOLD}5. Idempotency & Level-Triggered Design${NC}"
-dim "     Every sync must be safe to run N times."
-dim "     generation + observedGeneration = your idempotency key."
-echo ""
-
-echo -e "${G}$(printf '═%.0s' $(seq 1 58))${NC}"
-echo -e "  ${BOLD}Questions?${NC}"
-echo -e "${G}$(printf '═%.0s' $(seq 1 58))${NC}"
-echo ""
-echo -e "  ${DIM}Resources:${NC}"
-dim "    Operator Pattern:   kubernetes.io/docs/concepts/extend-kubernetes/operator"
-dim "    client-go:          github.com/kubernetes/client-go"
-dim "    sample-controller:  github.com/kubernetes/sample-controller"
-dim "    OperatorHub:        operatorhub.io (300+ production operators)"
 echo ""
