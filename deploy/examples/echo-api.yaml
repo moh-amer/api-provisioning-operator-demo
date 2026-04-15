@@ -1,0 +1,26 @@
+# =============================================================================
+# echo-api — ApigeeAPI Demo CR
+#
+# Proxies to httpbin.org — an HTTP echo service that reflects back request
+# details (headers, body, IP, method). Excellent for demonstrating the proxy
+# is actually routing traffic through Apigee.
+#
+# Try after deployment:
+#   curl https://34.149.73.0.nip.io/echo/get            → echoes your request
+#   curl https://34.149.73.0.nip.io/echo/ip             → your public IP
+#   curl https://34.149.73.0.nip.io/echo/headers        → all request headers
+#   curl -X POST https://34.149.73.0.nip.io/echo/post \
+#     -H "Content-Type: application/json" \
+#     -d '{"message":"hello from k8s"}'
+# =============================================================================
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: echo-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/echo"
+  targetUrl: "https://httpbin.org"
+  description: "Echo API — routes to httpbin.org for request inspection (Demo)"

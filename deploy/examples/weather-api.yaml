@@ -1,0 +1,12 @@
+# Example: Create a weather API proxy
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: weather-api
+  namespace: default
+spec:
+  organization: "YOUR_GCP_PROJECT"
+  environment: "eval"
+  basePath: "/weather"
+  targetUrl: "https://api.open-meteo.com"
+  description: "Weather API — managed by Kubernetes Operator"

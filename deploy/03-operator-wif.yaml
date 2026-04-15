@@ -1,0 +1,97 @@
+################################################################################
+# Apigee API Operator — Workload Identity Federation Deployment
+#
+# This manifest enables KEYLESS authentication from ANY Kubernetes cluster to GCP.
+# It works by:
+#
+#   1. Projecting a short-lived Kubernetes ServiceAccount token into the pod
+#      at /var/run/service-account/token  (refreshed automatically by kubelet)
+#
+#   2. Mounting a credentials.json CONFIGURATION file (not a key!) that tells
+#      the Google ADC library:
+#        "Exchange the K8s token at /var/run/service-account/token
+#         via GCP STS to get a GCP access token"
+#
+#   3. Setting GOOGLE_APPLICATION_CREDENTIALS to point to that config file.
+#      The go ADC library (google.FindDefaultCredentials) reads it automatically.
+#
+# The flow at runtime:
+#   Pod SA token → GCP Security Token Service (STS) → Short-lived GCP token
+#                                                    → Apigee REST API ✓
+#
+# Prerequisites:
+#   Run: hack/setup-wif.sh --project YOUR_PROJECT --cluster-issuer YOUR_ISSUER
+#   (or --gke for GKE, or --kind for local kind)
+################################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apigee-api-operator
+  namespace: apigee-api-operator-system
+  labels:
+    app: apigee-api-operator
+    auth-mode: workload-identity-federation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apigee-api-operator
+  template:
+    metadata:
+      labels:
+        app: apigee-api-operator
+    spec:
+      serviceAccountName: apigee-api-operator
+      containers:
+        - name: operator
+          image: apigee-api-operator:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - -v=4
+          env:
+            # Tell the Google ADC library where to find the WIF credentials config.
+            # This is NOT a service account key — it's a routing config that tells
+            # the library: "use the K8s token at this path and exchange it via GCP STS"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/wif/credentials.json
+
+          volumeMounts:
+            # Volume 1: The projected K8s ServiceAccount token
+            # - Short-lived (1 hour TTL), auto-refreshed by kubelet
+            # - Contains identity claims about the pod/namespace/SA
+            # - GCP STS reads this and issues a GCP access token in exchange
+            - name: workload-identity-token
+              mountPath: /var/run/service-account
+              readOnly: true
+
+            # Volume 2: The WIF credentials config (from ConfigMap created by setup-wif.sh)
+            # - NOT a secret — it's just config pointing to the token path above
+            # - Can be committed to git safely
+            - name: wif-credentials-config
+              mountPath: /var/run/wif
+              readOnly: true
+
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: 100m
+            requests:
+              memory: 64Mi
+              cpu: 50m
+
+      volumes:
+        # Projected ServiceAccount token with:
+        #   audience: matching the WIF pool (so GCP STS accepts it)
+        #   expirationSeconds: 3600 (kubelet auto-rotates before expiry)
+        - name: workload-identity-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  expirationSeconds: 3600
+                  audience: "//iam.googleapis.com/projects/$(PROJECT_NUMBER)/locations/global/workloadIdentityPools/apigee-operator-pool/providers/k8s-provider"
+
+        # The WIF config JSON (created as a ConfigMap by setup-wif.sh)
+        - name: wif-credentials-config
+          configMap:
+            name: apigee-wif-config

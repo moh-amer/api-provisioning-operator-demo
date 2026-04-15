@@ -1,0 +1,59 @@
+# =============================================================================
+# Apigee API Operator — .gitignore
+# =============================================================================
+
+# ── Compiled binary ───────────────────────────────────────────────────────────
+apigee-api-operator
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# ── Go build cache & coverage ─────────────────────────────────────────────────
+*.out
+coverage.html
+coverage.txt
+dist/
+
+# ── GCP / Service Account credentials — NEVER commit these ───────────────────
+*.json
+sa-key*
+key.json
+*-key.json
+*credentials*.json
+application_default_credentials.json
+
+# ── Local kubeconfig overrides ────────────────────────────────────────────────
+kubeconfig
+kubeconfig-*
+*.kubeconfig
+
+# ── Editor swap / temp files ──────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── IDE directories ───────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+/tmp/
+
+# ── Local test / scratch scripts ──────────────────────────────────────────────
+scratch/
+local/
+test-output/
+
+# ── Docker build artifacts ────────────────────────────────────────────────────
+.dockerignore.local
+
+# ── Generated code (if regenerating with code-gen scripts) ───────────────────
+# Uncomment below if you regenerate client code locally and don't commit it:
+# pkg/generated/

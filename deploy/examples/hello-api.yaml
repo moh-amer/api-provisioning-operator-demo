@@ -1,0 +1,24 @@
+# Example: Create a simple hello API proxy on Apigee
+#
+# This CR tells the operator to:
+# 1. Generate a proxy bundle with basePath=/hello routing to httpbin.org
+# 2. Upload it to the specified Apigee organization
+# 3. Deploy it to the 'eval' environment
+# 4. Report the public URL in .status.publicUrl
+#
+# Usage:
+#   kubectl apply -f deploy/examples/hello-api.yaml
+#   kubectl get aapi                    # check status
+#   curl https://YOUR-ORG-eval.apigee.net/hello/get   # test the API
+#
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: hello-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/k8s-demo"
+  targetUrl: "https://httpbin.org"
+  description: "Hello API — managed by Kubernetes Operator (DevOps Session Demo)"

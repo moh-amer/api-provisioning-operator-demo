@@ -1,0 +1,22 @@
+# =============================================================================
+# mock-users-api — ApigeeAPI Demo CR
+#
+# Proxies to JSONPlaceholder (https://jsonplaceholder.typicode.com) — a free
+# fake REST API perfect for demos and testing.
+#
+# Try after deployment:
+#   curl https://34.149.73.0.nip.io/mock-users/users       → list of 10 users
+#   curl https://34.149.73.0.nip.io/mock-users/posts/1     → a blog post
+#   curl https://34.149.73.0.nip.io/mock-users/todos/1     → a todo item
+# =============================================================================
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: mock-users-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/mock-users"
+  targetUrl: "https://jsonplaceholder.typicode.com"
+  description: "Mock Users API — JSONPlaceholder (Demo)"

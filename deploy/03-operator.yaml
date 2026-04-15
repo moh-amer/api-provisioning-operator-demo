@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apigee-api-operator
+  namespace: apigee-api-operator-system
+  labels:
+    app: apigee-api-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apigee-api-operator
+  template:
+    metadata:
+      labels:
+        app: apigee-api-operator
+    spec:
+      serviceAccountName: apigee-api-operator
+      # ─────────────────────────────────────────────────────────────────────
+      # Authentication (handled automatically by hack/setup-auth.sh):
+      #
+      #   GKE:          Workload Identity — no secret needed at all.
+      #                 The K8s SA annotation routes auth through GKE.
+      #
+      #   Other clusters: hack/setup-auth.sh creates the 'apigee-sa-key'
+      #                 secret. The GOOGLE_APPLICATION_CREDENTIALS env var
+      #                 points the Go ADC library to it automatically.
+      # ─────────────────────────────────────────────────────────────────────
+      containers:
+        - name: operator
+          image: apigee-api-operator:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - -v=4
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/google/key.json
+          volumeMounts:
+            - name: gcp-credentials
+              mountPath: /var/secrets/google
+              readOnly: true
+          resources:
+            limits:
+              memory: 128Mi
+              cpu: 100m
+            requests:
+              memory: 64Mi
+              cpu: 50m
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: gcp-credentials
+          secret:
+            # Created by: make setup-auth PROJECT=<your-project>
+            # On GKE with Workload Identity: this secret is not needed
+            # but the optional:true means the pod still starts fine.
+            secretName: apigee-sa-key
+            optional: true

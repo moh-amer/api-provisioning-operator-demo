@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: apigee-api-operator
+  namespace: apigee-api-operator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: apigee-api-operator
+rules:
+  # Full access to our CRD
+  - apiGroups: ["apigee.example.com"]
+    resources: ["apigeeapis"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apigee.example.com"]
+    resources: ["apigeeapis/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["apigee.example.com"]
+    resources: ["apigeeapis/finalizers"]
+    verbs: ["update"]
+  # Events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: apigee-api-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: apigee-api-operator
+subjects:
+  - kind: ServiceAccount
+    name: apigee-api-operator
+    namespace: apigee-api-operator-system
