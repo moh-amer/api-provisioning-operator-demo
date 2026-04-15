@@ -17,24 +17,43 @@ spec:
     spec:
       serviceAccountName: apigee-api-operator
       # ─────────────────────────────────────────────────────────────────────
-      # Authentication (handled automatically by hack/setup-auth.sh):
+      # Authentication:
       #
-      #   GKE:          Workload Identity — no secret needed at all.
-      #                 The K8s SA annotation routes auth through GKE.
+      #   kind / non-GKE: hack/setup-auth.sh creates the 'apigee-sa-key'
+      #     secret from your ADC or a service account key.
+      #     GOOGLE_APPLICATION_CREDENTIALS points the Go ADC library to it.
       #
-      #   Other clusters: hack/setup-auth.sh creates the 'apigee-sa-key'
-      #                 secret. The GOOGLE_APPLICATION_CREDENTIALS env var
-      #                 points the Go ADC library to it automatically.
+      #   GKE (Workload Identity): hack/setup-auth.sh annotates the K8s SA
+      #     to impersonate the GCP SA — no secret needed. The volume mount
+      #     is optional: true so the pod starts fine without the secret.
       # ─────────────────────────────────────────────────────────────────────
       containers:
         - name: operator
           image: apigee-api-operator:latest
           imagePullPolicy: IfNotPresent
           args:
-            - -v=4
+            - -v=2
           env:
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: /var/secrets/google/key.json
+          ports:
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: gcp-credentials
               mountPath: /var/secrets/google
@@ -46,18 +65,11 @@ spec:
             requests:
               memory: 64Mi
               cpu: 50m
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8081
-            initialDelaySeconds: 15
-            periodSeconds: 20
-            failureThreshold: 3
       volumes:
         - name: gcp-credentials
           secret:
             # Created by: make setup-auth PROJECT=<your-project>
-            # On GKE with Workload Identity: this secret is not needed
-            # but the optional:true means the pod still starts fine.
+            # On GKE with Workload Identity this secret is not needed —
+            # optional: true means the pod still starts fine.
             secretName: apigee-sa-key
             optional: true

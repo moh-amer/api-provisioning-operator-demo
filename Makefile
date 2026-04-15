@@ -87,7 +87,9 @@ kind-create: ## Create a local kind cluster (assumes kind is installed)
 
 .PHONY: kind-load
 kind-load: docker-build ## Build and load Docker image into kind cluster
-	kind load docker-image $(LOCAL_IMAGE) --name $(KIND_CLUSTER)
+	@# kind load is broken with overlayfs; pipe directly into containerd k8s.io namespace
+	docker save $(LOCAL_IMAGE) | docker exec -i $(KIND_CLUSTER)-control-plane ctr -n k8s.io images import -
+	@echo "✓ Image $(LOCAL_IMAGE) loaded into kind cluster $(KIND_CLUSTER)"
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 .PHONY: install
@@ -149,17 +151,20 @@ set-project: ## Stamp your GCP project into all example YAMLs. Usage: make set-p
 	 echo "✓ Examples now use project: $(PROJECT)"
 
 .PHONY: quickstart
-quickstart: ## After bootstrap-kind: auth + stamp project + ready to run. Usage: make quickstart PROJECT=my-project
+quickstart: ## After bootstrap-kind: auth + deploy operator inside kind. Usage: make quickstart PROJECT=my-project
 	@[[ -n "$(PROJECT)" ]] || (echo "ERROR: PROJECT required. Usage: make quickstart PROJECT=my-project" && exit 1)
 	$(MAKE) set-project PROJECT=$(PROJECT)
 	$(MAKE) setup-auth PROJECT=$(PROJECT) ENV=$(ENV)
+	$(MAKE) deploy
 	@echo ""
-	@echo "  ✅ Ready! Run the operator in this terminal:"
-	@echo "     ./apigee-api-operator --kubeconfig ~/.kube/config -v=2"
+	@echo "  ✅ Operator is running inside the kind cluster!"
 	@echo ""
-	@echo "  Then in another terminal:"
+	@echo "  Apply an API proxy:"
 	@echo "     kubectl apply -f deploy/examples/hello-api.yaml"
 	@echo "     kubectl get aapi -w"
+	@echo ""
+	@echo "  Run the demo:"
+	@echo "     BASE_URL=https://YOUR_APIGEE_HOSTNAME ./demo/demo-script.sh"
 	@echo ""
 
 

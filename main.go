@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -25,6 +26,23 @@ func main() {
 
 	ctx := signals.SetupSignalHandler()
 	logger := klog.FromContext(ctx)
+
+	// Health / readiness endpoints for the Deployment liveness + readiness probes.
+	// Serves on :8081 so the pod can run inside kind without crashlooping.
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+		mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+		if err := http.ListenAndServe(":8081", mux); err != nil {
+			logger.Error(err, "Health server failed")
+		}
+	}()
 
 	// 1️⃣  Build kubeconfig
 	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
