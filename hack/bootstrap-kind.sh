@@ -375,22 +375,31 @@ blank
 
 echo -e "  ${BOLD}Next steps:${NC}"
 blank
-echo -e "  ${B}Step 1${NC} — Authenticate with GCP (run this as the current user):"
-echo -e "  ${DIM}  gcloud auth application-default login${NC}"
+echo -e "  ${B}Step 1${NC} — Authenticate with GCP"
+echo -e "  ${DIM}  No GUI on this server? Use --no-launch-browser (headless):${NC}"
+echo -e "  ${DIM}  gcloud auth application-default login --no-launch-browser${NC}"
 blank
-echo -e "  ${B}Step 2${NC} — Set up auth secret in the cluster:"
-echo -e "  ${DIM}  cd ${REPO_DIR}${NC}"
+echo -e "  ${DIM}  It prints a URL. Open it on any device (laptop / phone),${NC}"
+echo -e "  ${DIM}  log in to Google, copy the code it shows, paste it here.${NC}"
+blank
+echo -e "  ${DIM}  OR copy ADC from your local machine (if already authed):${NC}"
+echo -e "  ${DIM}  [local]  cat ~/.config/gcloud/application_default_credentials.json${NC}"
+echo -e "  ${DIM}  [server] mkdir -p ~/.config/gcloud${NC}"
+echo -e "  ${DIM}           cat > ~/.config/gcloud/application_default_credentials.json${NC}"
+blank
+echo -e "  ${DIM}  OR use a service account key (CI / no interactivity):${NC}"
+echo -e "  ${DIM}  export GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json${NC}"
+blank
+echo -e "  ${B}Step 2${NC} — Set up Kubernetes auth secret:"
 echo -e "  ${DIM}  ./hack/setup-auth.sh --project YOUR_GCP_PROJECT${NC}"
 blank
-echo -e "  ${B}Step 3${NC} — Run the operator (in a separate terminal):"
-echo -e "  ${DIM}  cd ${REPO_DIR}${NC}"
+echo -e "  ${B}Step 3${NC} — Run the operator (separate terminal):"
 echo -e "  ${DIM}  ./apigee-api-operator --kubeconfig ~/.kube/config -v=2${NC}"
 blank
-echo -e "  ${B}Step 4${NC} — Apply an API and watch it deploy:"
+echo -e "  ${B}Step 4${NC} — Apply an API and watch:"
 echo -e "  ${DIM}  kubectl apply -f deploy/examples/hello-api.yaml${NC}"
 echo -e "  ${DIM}  kubectl get aapi -w${NC}"
 blank
 echo -e "  ${B}Step 5${NC} — Run the demo:"
-echo -e "  ${DIM}  cd ${REPO_DIR}${NC}"
 echo -e "  ${DIM}  BASE_URL=https://YOUR_APIGEE_HOSTNAME ./demo/demo-script.sh${NC}"
 blank
