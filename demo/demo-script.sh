@@ -228,6 +228,53 @@ say "Webhooks are EDGE-triggered: miss an event = miss the action."
 say "Control loops are LEVEL-triggered: always comparing state."
 say "This is why Kubernetes self-heals."
 
+section "Under the hood: Informers & Workqueue"
+
+diagram "  HOW THE OPERATOR WATCHES efficiently:
+
+  Naive (wrong):
+    poll every 5s x 1000 objects = API server hammered to death
+
+  Informer (right):
+    Startup: List() ──▶ local cache filled   (1 API call, ever)
+    Runtime: Watch() ──▶ persistent TCP stream  (0 polling)
+             ADDED / MODIFIED event ──▶ enqueue key 'default/hello-api'
+
+  Worker goroutines pop the key and read FRESH state from cache.
+
+  3 things SREs care about:
+    1. Reads are FREE   — served from local cache, not the API server
+    2. Deduplication    — 100 events same object = 1 sync
+    3. Keys not objects — worker reads CURRENT state, not event state
+       This is WHY it is level-triggered, not edge-triggered."
+
+section "Live: see the informer startup in operator logs"
+
+say "The operator prints every phase of this sequence on startup:"
+echo ""
+
+run_and_pause "grep -iE 'cache|worker|sync' /tmp/operator-test.log | head -8" \
+    "Cache populated, workers started — straight from the operator:"
+
+section "Live: deduplication in action"
+
+say "Patch the CR twice in rapid succession."
+say "The workqueue deduplicates — you should see ONE syncHandler call, not two."
+echo ""
+
+run_step "kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-1\"}}' \
+  && sleep 0.2 \
+  && kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-2\"}}'  " \
+    "Fire two patches back to back:"
+
+run_and_pause "sleep 12 && echo 'Total syncs for hello-api:' && grep -c 'Successfully synced.*hello-api' /tmp/operator-test.log" \
+    "Count of syncHandler calls — expect 1-2 despite 2 events:"
+
+say "The queue collapses duplicates. Whether it's 2 patches or 200, the"
+say "worker only runs once per unique key per drain cycle."
+echo ""
+
+
 section "Watch the loop run — apply a CR"
 
 say "Apply the CR. Watch: Finalizer → Creating → Deploying → Ready"
