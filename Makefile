@@ -140,6 +140,29 @@ undeploy: ## Remove the operator from the cluster
 delete-apis: ## Delete all ApigeeAPI CRs (triggers Apigee cleanup via finalizer)
 	kubectl delete apigeeapis --all --all-namespaces --ignore-not-found
 
+# ── Quickstart (after bootstrap-kind) ────────────────────────────────────────
+.PHONY: set-project
+set-project: ## Stamp your GCP project into all example YAMLs. Usage: make set-project PROJECT=my-project
+	@[[ -n "$(PROJECT)" ]] || (echo "ERROR: PROJECT required" && exit 1)
+	@OLD=$$(grep -h 'organization:' deploy/examples/*.yaml | head -1 | awk -F'"' '{print $$2}'); \
+	 sed -i "s|organization: \"$$OLD\"|organization: \"$(PROJECT)\"|g" deploy/examples/*.yaml; \
+	 echo "✓ Examples now use project: $(PROJECT)"
+
+.PHONY: quickstart
+quickstart: ## After bootstrap-kind: auth + stamp project + ready to run. Usage: make quickstart PROJECT=my-project
+	@[[ -n "$(PROJECT)" ]] || (echo "ERROR: PROJECT required. Usage: make quickstart PROJECT=my-project" && exit 1)
+	$(MAKE) set-project PROJECT=$(PROJECT)
+	$(MAKE) setup-auth PROJECT=$(PROJECT) ENV=$(ENV)
+	@echo ""
+	@echo "  ✅ Ready! Run the operator in this terminal:"
+	@echo "     ./apigee-api-operator --kubeconfig ~/.kube/config -v=2"
+	@echo ""
+	@echo "  Then in another terminal:"
+	@echo "     kubectl apply -f deploy/examples/hello-api.yaml"
+	@echo "     kubectl get aapi -w"
+	@echo ""
+
+
 # ── Demo ──────────────────────────────────────────────────────────────────────
 .PHONY: demo
 demo: ## Apply the hello-api example and watch
