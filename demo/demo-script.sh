@@ -256,25 +256,6 @@ echo ""
 run_and_pause "grep -iE 'cache|worker|sync' /tmp/operator-test.log | head -8" \
     "Cache populated, workers started — straight from the operator:"
 
-section "Live: deduplication in action"
-
-say "Patch the CR twice in rapid succession."
-say "The workqueue deduplicates — you should see ONE syncHandler call, not two."
-echo ""
-
-run_step "kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-1\"}}' \
-  && sleep 0.2 \
-  && kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-2\"}}'  " \
-    "Fire two patches back to back:"
-
-run_and_pause "sleep 12 && echo 'Total syncs for hello-api:' && grep -c 'Successfully synced.*hello-api' /tmp/operator-test.log" \
-    "Count of syncHandler calls — expect 1-2 despite 2 events:"
-
-say "The queue collapses duplicates. Whether it's 2 patches or 200, the"
-say "worker only runs once per unique key per drain cycle."
-echo ""
-
-
 section "Watch the loop run — apply a CR"
 
 say "Apply the CR. Watch: Finalizer → Creating → Deploying → Ready"
@@ -296,6 +277,26 @@ run_and_pause "$K describe apigeeapi hello-api" \
 
 run_and_pause "$K get apigeeapi hello-api -o jsonpath='{.status.publicUrl}' && echo" \
     "The live public URL:"
+
+section "Live: deduplication in action"
+
+say "Patch the CR twice in rapid succession."
+say "The workqueue deduplicates — you should see ONE syncHandler call, not two."
+echo ""
+
+run_step "kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-1\"}}' \
+  && sleep 0.2 \
+  && kubectl patch apigeeapi hello-api --type=merge -p '{\"spec\":{\"description\":\"dedup-test-2\"}}'  " \
+    "Fire two patches back to back:"
+
+run_and_pause "sleep 12 && echo 'Total syncs for hello-api:' && grep -c 'Successfully synced.*hello-api' /tmp/operator-test.log" \
+    "Count of syncHandler calls — expect 1-2 despite 2 events:"
+
+say "The queue collapses duplicates. Whether it's 2 patches or 200, the"
+say "worker only runs once per unique key per drain cycle."
+echo ""
+
+
 
 section "Hit the live API"
 
