@@ -287,7 +287,8 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 	}
 
 	revision, err := c.apigeeClient.CreateProxyWithBundle(ctx,
-		api.Spec.Organization, proxyName, api.Spec.BasePath, api.Spec.TargetURL, api.Spec.Description)
+		api.Spec.Organization, proxyName, api.Spec.BasePath, api.Spec.TargetURL, api.Spec.Description,
+		api.Spec.Policies)
 	if err != nil {
 		c.recorder.Event(api, corev1.EventTypeWarning, ErrApigee, fmt.Sprintf("Failed to create proxy: %v", err))
 		return c.updateStatus(ctx, api, "Error", false, 0, "", fmt.Sprintf("Failed to create proxy: %v", err))

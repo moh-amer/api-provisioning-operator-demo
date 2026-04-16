@@ -1,0 +1,38 @@
+# Example: Rate-limited API proxy with Quota + SpikeArrest policies
+#
+# Demonstrates how to attach policies to a proxy using spec.policies.
+# Both policies run in ProxyEndpoint PreFlow Request, in declaration order.
+#
+# SpikeArrest: smooths bursts — max 30 requests per minute regardless of quota
+# Quota:       hard cap   — max 1000 requests per day per API product
+#
+# Usage:
+#   kubectl apply -f deploy/examples/rate-limited-api.yaml
+#   kubectl get aapi rate-limited-api -w
+#
+#   # Hit the endpoint until you see a 429:
+#   for i in $(seq 1 50); do
+#     curl -s -o /dev/null -w "%{http_code}\n" \
+#       https://YOUR_APIGEE_HOSTNAME/limited/get
+#   done
+#
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: rate-limited-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/limited"
+  targetUrl: "https://httpbin.org"
+  description: "Rate-limited API — Quota + SpikeArrest demo"
+  policies:
+    - type: SpikeArrest
+      config:
+        rate: "30pm"       # max 30 requests per minute (burst smoothing)
+    - type: Quota
+      config:
+        allow: "1000"
+        interval: "1"
+        timeUnit: "day"    # 1000 requests per day hard cap

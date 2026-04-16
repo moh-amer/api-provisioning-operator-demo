@@ -24,6 +24,21 @@ type ApigeeAPI struct {
 	Status ApigeeAPIStatus `json:"status"`
 }
 
+// PolicySpec defines a single Apigee policy to attach to the proxy.
+// All policies run in ProxyEndpoint PreFlow Request, in declaration order,
+// after the built-in StripBasePath policy.
+type PolicySpec struct {
+	// Type is the Apigee policy type.
+	// Supported: Quota, SpikeArrest, VerifyAPIKey, CORS, OAuthV2.
+	Type string `json:"type"`
+	// Name is the policy instance name in Apigee.
+	// Defaults to "{Type}-{index}". Must be unique within the proxy.
+	Name string `json:"name,omitempty"`
+	// Config holds policy-specific key-value configuration.
+	// See README for supported keys per policy type.
+	Config map[string]string `json:"config,omitempty"`
+}
+
 // ApigeeAPISpec defines the desired state — what API proxy to create on Apigee.
 type ApigeeAPISpec struct {
 	// Organization is the Apigee organization name (GCP project for Apigee X).
@@ -38,6 +53,10 @@ type ApigeeAPISpec struct {
 	TargetURL string `json:"targetUrl"`
 	// Description is an optional description for the API proxy.
 	Description string `json:"description,omitempty"`
+	// Policies is the ordered list of Apigee policies to attach to the proxy.
+	// Policies run in ProxyEndpoint PreFlow Request, in declaration order,
+	// after the built-in StripBasePath policy.
+	Policies []PolicySpec `json:"policies,omitempty"`
 }
 
 // ApigeeAPIStatus defines the observed state — what Apigee reports back.

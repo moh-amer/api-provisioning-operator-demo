@@ -21,6 +21,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
+
+	apigeeapiv1alpha1 "github.com/devops-demo/apigee-api-operator/pkg/apis/apigeeapi/v1alpha1"
 )
 
 const (
@@ -76,15 +78,16 @@ func (c *Client) GetProxy(ctx context.Context, org, proxyName string) (*ProxyInf
 
 // CreateProxyWithBundle creates or updates an API proxy by uploading a proxy bundle ZIP.
 // The bundle is generated in-memory from the provided parameters.
-func (c *Client) CreateProxyWithBundle(ctx context.Context, org, proxyName, basePath, targetURL, description string) (int, error) {
+// policies is the ordered list of user-declared policies to include in the bundle.
+func (c *Client) CreateProxyWithBundle(ctx context.Context, org, proxyName, basePath, targetURL, description string, policies []apigeeapiv1alpha1.PolicySpec) (int, error) {
 	logger := klog.FromContext(ctx)
 
 	// Generate the proxy bundle ZIP in memory
-	bundleBytes, err := generateProxyBundle(proxyName, basePath, targetURL, description)
+	bundleBytes, err := generateProxyBundle(proxyName, basePath, targetURL, description, policies)
 	if err != nil {
 		return 0, fmt.Errorf("failed to generate proxy bundle: %w", err)
 	}
-	logger.V(4).Info("Generated proxy bundle", "proxyName", proxyName, "size", len(bundleBytes))
+	logger.V(4).Info("Generated proxy bundle", "proxyName", proxyName, "size", len(bundleBytes), "policies", len(policies))
 
 	// Upload as multipart/form-data
 	url := fmt.Sprintf("%s/organizations/%s/apis?action=import&name=%s", apigeeBaseURL, org, proxyName)
@@ -287,44 +290,67 @@ func (c *Client) readError(resp *http.Response) error {
 }
 
 // generateProxyBundle creates an Apigee proxy bundle ZIP in memory.
-// The bundle consists of XML files inside a ZIP:
 //
-//   apiproxy/{name}.xml              - main proxy config
-//   apiproxy/policies/StripBasePath.xml - removes basePath prefix before forwarding
-//   apiproxy/proxies/default.xml     - ProxyEndpoint (incoming side)
-//   apiproxy/targets/default.xml     - TargetEndpoint (backend side)
+// Bundle structure:
 //
-// Path stripping: by default Apigee forwards the full request path (including
-// basePath) to the backend. The StripBasePath AssignMessage policy rewrites
-// the path so backends only see the suffix after the basePath.
-// Example: GET /echo/headers -> backend receives GET /headers
-func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]byte, error) {
+//	apiproxy/{name}.xml                  - main proxy descriptor
+//	apiproxy/policies/StripBasePath.xml  - always present: strips basePath before forwarding
+//	apiproxy/policies/{policy}.xml       - one file per user-declared policy
+//	apiproxy/proxies/default.xml         - ProxyEndpoint (inbound side)
+//	apiproxy/targets/default.xml         - TargetEndpoint (backend side)
+//
+// All policies run in ProxyEndpoint PreFlow Request, in declaration order,
+// after StripBasePath. Unknown policy types are skipped with a warning.
+func generateProxyBundle(proxyName, basePath, targetURL, description string, policies []apigeeapiv1alpha1.PolicySpec) ([]byte, error) {
 	if description == "" {
 		description = "Managed by Kubernetes ApigeeAPI operator"
 	}
 
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+	// ── Resolve all policy names + XML ────────────────────────────────────────
+	// StripBasePath is always first.
+	resolvedNames := []string{"StripBasePath"}
+	policyFiles := map[string]string{}
 
+	for i, p := range policies {
+		name, xmlContent := generatePolicyXML(p, i)
+		if name == "" {
+			klog.Warningf("Skipping unknown policy type %q at index %d", p.Type, i)
+			continue
+		}
+		resolvedNames = append(resolvedNames, name)
+		policyFiles["apiproxy/policies/"+name+".xml"] = xmlContent
+	}
+
+	// ── Build dynamic XML blocks ──────────────────────────────────────────────
+	// <Policies> block in the main descriptor
+	var policyElements strings.Builder
+	for _, name := range resolvedNames {
+		policyElements.WriteString(fmt.Sprintf("    <Policy>%s</Policy>\n", name))
+	}
+
+	// <Step> elements in ProxyEndpoint PreFlow Request
+	var stepElements strings.Builder
+	for _, name := range resolvedNames {
+		stepElements.WriteString(fmt.Sprintf("      <Step><Name>%s</Name></Step>\n", name))
+	}
+
+	// ── XML file contents ─────────────────────────────────────────────────────
 	mainXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <APIProxy revision="1" name="%s">
   <Description>%s</Description>
   <BasePaths>%s</BasePaths>
   <Policies>
-    <Policy>StripBasePath</Policy>
-  </Policies>
+%s  </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>default</ProxyEndpoint>
   </ProxyEndpoints>
   <TargetEndpoints>
     <TargetEndpoint>default</TargetEndpoint>
   </TargetEndpoints>
-</APIProxy>`, proxyName, description, basePath)
+</APIProxy>`, proxyName, description, basePath, policyElements.String())
 
-	// AssignMessage policy: rewrites the forwarded path to proxy.pathsuffix —
-	// the built-in Apigee variable containing the URL path AFTER the basePath.
-	// Example: basePath=/echo, request=/echo/headers -> proxy.pathsuffix=/headers
-	// This is the canonical Apigee X way to strip the basePath before forwarding.
+	// StripBasePath: rewrites path to proxy.pathsuffix (the suffix after basePath).
+	// Example: basePath=/echo, request=/echo/get → target receives GET /get
 	stripPolicyXML := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <AssignMessage name="StripBasePath">
   <DisplayName>StripBasePath</DisplayName>
@@ -335,15 +361,12 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
 </AssignMessage>`
 
-	// ProxyEndpoint: runs StripBasePath in PreFlow before routing to target
+	// ProxyEndpoint: all resolved policies run in PreFlow Request
 	proxyXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <ProxyEndpoint name="default">
   <PreFlow name="PreFlow">
     <Request>
-      <Step>
-        <Name>StripBasePath</Name>
-      </Step>
-    </Request>
+%s    </Request>
     <Response/>
   </PreFlow>
   <Flows/>
@@ -357,9 +380,8 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
   <RouteRule name="default">
     <TargetEndpoint>default</TargetEndpoint>
   </RouteRule>
-</ProxyEndpoint>`, basePath)
+</ProxyEndpoint>`, stepElements.String(), basePath)
 
-	// TargetEndpoint: receives path already stripped of the basePath prefix
 	targetXML := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <TargetEndpoint name="default">
   <PreFlow name="PreFlow">
@@ -376,13 +398,20 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
   </HTTPTargetConnection>
 </TargetEndpoint>`, targetURL)
 
+	// ── Assemble ZIP ──────────────────────────────────────────────────────────
 	files := map[string]string{
-		"apiproxy/" + proxyName + ".xml":        mainXML,
-		"apiproxy/policies/StripBasePath.xml":   stripPolicyXML,
-		"apiproxy/proxies/default.xml":          proxyXML,
-		"apiproxy/targets/default.xml":          targetXML,
+		"apiproxy/" + proxyName + ".xml":       mainXML,
+		"apiproxy/policies/StripBasePath.xml": stripPolicyXML,
+		"apiproxy/proxies/default.xml":        proxyXML,
+		"apiproxy/targets/default.xml":        targetXML,
+	}
+	// Merge user policy files
+	for path, content := range policyFiles {
+		files[path] = content
 	}
 
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
 	for name, fileContent := range files {
 		fw, err := zw.Create(name)
 		if err != nil {
@@ -392,10 +421,88 @@ func generateProxyBundle(proxyName, basePath, targetURL, description string) ([]
 			return nil, err
 		}
 	}
-
 	if err := zw.Close(); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// generatePolicyXML returns the policy instance name and its XML content.
+// Returns ("", "") for unknown types — caller logs a warning and skips.
+func generatePolicyXML(p apigeeapiv1alpha1.PolicySpec, index int) (name, xmlContent string) {
+	name = p.Name
+	if name == "" {
+		name = fmt.Sprintf("%s-%d", p.Type, index)
+	}
+
+	switch p.Type {
+	case "Quota":
+		allow := configOrDefault(p.Config, "allow", "1000")
+		interval := configOrDefault(p.Config, "interval", "1")
+		timeUnit := configOrDefault(p.Config, "timeUnit", "minute")
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Quota name="%s">
+  <Allow count="%s"/>
+  <Interval>%s</Interval>
+  <TimeUnit>%s</TimeUnit>
+  <Distributed>true</Distributed>
+  <Synchronous>true</Synchronous>
+</Quota>`, name, allow, interval, timeUnit)
+
+	case "SpikeArrest":
+		rate := configOrDefault(p.Config, "rate", "30pm")
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SpikeArrest name="%s">
+  <Rate>%s</Rate>
+</SpikeArrest>`, name, rate)
+
+	case "VerifyAPIKey":
+		location := configOrDefault(p.Config, "apiKeyLocation", "queryparam")
+		keyName := configOrDefault(p.Config, "apiKeyName", "apikey")
+		ref := fmt.Sprintf("request.queryparam.%s", keyName)
+		if location == "header" {
+			ref = fmt.Sprintf("request.header.%s", keyName)
+		}
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<VerifyAPIKey name="%s">
+  <APIKey ref="%s"/>
+</VerifyAPIKey>`, name, ref)
+
+	case "CORS":
+		origins := configOrDefault(p.Config, "allowOrigins", "*")
+		methods := configOrDefault(p.Config, "allowMethods", "GET,POST,PUT,DELETE,OPTIONS")
+		headers := configOrDefault(p.Config, "allowHeaders", "Content-Type,Authorization")
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage name="%s">
+  <AssignTo createNew="false" type="response"/>
+  <Set>
+    <Headers>
+      <Header name="Access-Control-Allow-Origin">%s</Header>
+      <Header name="Access-Control-Allow-Methods">%s</Header>
+      <Header name="Access-Control-Allow-Headers">%s</Header>
+    </Headers>
+  </Set>
+</AssignMessage>`, name, origins, methods, headers)
+
+	case "OAuthV2":
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OAuthV2 name="%s">
+  <Operation>VerifyAccessToken</Operation>
+</OAuthV2>`, name)
+
+	default:
+		return "", ""
+	}
+	return name, xmlContent
+}
+
+// configOrDefault returns cfg[key] if present and non-empty, otherwise defaultVal.
+func configOrDefault(cfg map[string]string, key, defaultVal string) string {
+	if cfg != nil {
+		if v, ok := cfg[key]; ok && v != "" {
+			return v
+		}
+	}
+	return defaultVal
 }
 

@@ -40,6 +40,25 @@ spec:
                 description:
                   type: string
                   description: "Optional description for the API proxy"
+                policies:
+                  type: array
+                  description: "Ordered list of Apigee policies. Run in ProxyEndpoint PreFlow Request after StripBasePath."
+                  items:
+                    type: object
+                    required: ["type"]
+                    properties:
+                      type:
+                        type: string
+                        description: "Policy type"
+                        enum: [Quota, SpikeArrest, VerifyAPIKey, CORS, OAuthV2]
+                      name:
+                        type: string
+                        description: "Policy instance name (defaults to {Type}-{index})"
+                      config:
+                        type: object
+                        description: "Policy-specific key-value config. See docs for keys per type."
+                        additionalProperties:
+                          type: string
             status:
               type: object
               properties:
