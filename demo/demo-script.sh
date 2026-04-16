@@ -146,6 +146,45 @@ _dedup_check() {
 }
 
 # =============================================================================
+# SETUP: Stream operator pod logs → /tmp/operator-test.log
+# All demo grep steps read from this file regardless of how operator runs.
+# =============================================================================
+
+OPERATOR_NS="apigee-api-operator-system"
+OPERATOR_LOG="/tmp/operator-test.log"
+LOG_STREAM_PID=""
+
+_start_log_stream() {
+    # Check if operator is running as a pod (in-cluster mode)
+    local pod
+    pod=$(kubectl get pods -n "$OPERATOR_NS" -l app=apigee-api-operator \
+          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+
+    if [[ -n "$pod" ]]; then
+        echo -e "   ${DIM}Operator pod: ${pod}${NC}"
+        echo -e "   ${DIM}Streaming pod logs → ${OPERATOR_LOG}${NC}"
+        # Truncate + stream: historical (since 1h) then live
+        kubectl logs -n "$OPERATOR_NS" "$pod" --since=1h 2>/dev/null \
+            > "$OPERATOR_LOG"
+        kubectl logs -n "$OPERATOR_NS" "$pod" --follow 2>/dev/null \
+            >> "$OPERATOR_LOG" &
+        LOG_STREAM_PID=$!
+        echo -e "   ${G}✓  Log stream running (PID ${LOG_STREAM_PID})${NC}"
+    elif [[ -f "$OPERATOR_LOG" ]]; then
+        echo -e "   ${DIM}Using existing log file: ${OPERATOR_LOG}${NC}"
+        echo -e "   ${G}✓  (operator running out-of-cluster)${NC}"
+    else
+        echo -e "   ${Y}⚠  Operator pod not found and no local log file.${NC}"
+        echo -e "   ${Y}   Is the operator deployed? Run: make deploy${NC}"
+        echo -e "   ${Y}   Continuing demo — log-inspection steps will be skipped.${NC}"
+        touch "$OPERATOR_LOG"   # create empty file so grep doesn't error
+    fi
+}
+
+# Kill log stream on script exit
+trap '[[ -n "$LOG_STREAM_PID" ]] && kill "$LOG_STREAM_PID" 2>/dev/null || true' EXIT
+
+# =============================================================================
 # INTRO
 # =============================================================================
 clear
@@ -166,6 +205,11 @@ echo ""
 echo -en "  ${C}Press ENTER to start ▶${NC}  "
 read -r
 clear
+
+# Start streaming operator pod logs → /tmp/operator-test.log
+# All grep steps in the demo read from this file.
+_start_log_stream
+sleep 1
 
 # =============================================================================
 # CHAPTER 1 — WHAT IS AN OPERATOR? CRDs
