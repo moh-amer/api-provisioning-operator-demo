@@ -50,6 +50,12 @@ setup-auth: ## Setup GCP auth (auto-detects cluster). Usage: make setup-auth PRO
 	@chmod +x hack/setup-auth.sh
 	@hack/setup-auth.sh --project $(PROJECT) --env $(ENV) --namespace $(NAMESPACE)
 
+.PHONY: setup-auth-adc
+setup-auth-adc: ## ADC-only auth: skip GCP IAM, use existing ADC (for GCP VMs). Usage: make setup-auth-adc PROJECT=my-project
+	@[[ -n "$(PROJECT)" ]] || (echo "ERROR: PROJECT required" && exit 1)
+	@chmod +x hack/setup-auth.sh
+	@hack/setup-auth.sh --project $(PROJECT) --namespace $(NAMESPACE) --adc-only
+
 .PHONY: setup-wif
 setup-wif: ## Workload Identity Federation for any cluster. Usage: make setup-wif PROJECT=xxx [ISSUER=https://...]
 	@[[ -n "$(PROJECT)" ]] || (echo "ERROR: PROJECT required" && exit 1)
