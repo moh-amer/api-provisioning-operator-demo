@@ -112,8 +112,8 @@ pkg_install() {
     sudo "$PKG_INSTALL" install -y -q "$@"
 }
 
-# ── 0. Prerequisites: curl, git, python3 ─────────────────────────────────────
-step "System prerequisites: curl, git, python3"
+# ── 0. Prerequisites: curl, git, python3, make ───────────────────────────────
+step "System prerequisites: curl, git, python3, make"
 
 if ! installed curl; then
     info "Installing curl..."
@@ -132,6 +132,12 @@ if ! installed python3; then
     pkg_install python3
 fi
 ok "python3: $(python3 --version)"
+
+if ! installed make; then
+    info "Installing make..."
+    pkg_install make
+fi
+ok "make: $(make --version | head -1)"
 
 # ── 1. Docker ─────────────────────────────────────────────────────────────────
 step "Docker"

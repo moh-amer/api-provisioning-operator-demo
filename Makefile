@@ -1,3 +1,4 @@
+SHELL          := /bin/bash
 BINARY_NAME    = apigee-api-operator
 IMAGE_NAME     = apigee-api-operator
 IMAGE_TAG      ?= latest
