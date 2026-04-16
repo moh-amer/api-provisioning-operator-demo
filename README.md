@@ -18,6 +18,9 @@ kubectl delete -f my-api.yaml →  Apigee proxy undeployed & deleted automatical
    - [Option B: Any remote cluster (Workload Identity Federation)](#option-b-any-remote-cluster-workload-identity-federation)
    - [Option C: GKE (Built-in Workload Identity)](#option-c-gke-built-in-workload-identity)
 4. [Usage](#usage)
+   - [Create an API Proxy](#create-an-api-proxy)
+   - [Add Policies to Your API](#add-policies-to-your-api)
+   - [Update, Delete, Check Status](#update-an-api-proxy)
 5. [CRD Reference](#crd-reference)
 6. [Make Targets](#make-targets)
 7. [How It Works (Architecture)](#how-it-works-architecture)
@@ -226,7 +229,79 @@ kubectl apply -f my-api.yaml
 kubectl get aapi -w           # Watch phases: Creating → Deploying → Ready
 ```
 
-### Update an API Proxy
+### Add Policies to Your API
+
+Declare policies in `spec.policies[]`. They run in the Apigee ProxyEndpoint **PreFlow Request**
+in declaration order, after the built-in `StripBasePath` policy.
+
+#### Rate limiting (SpikeArrest + Quota)
+
+```yaml
+spec:
+  organization: "my-project"
+  environment: "eval"
+  basePath: "/limited"
+  targetUrl: "https://httpbin.org"
+  policies:
+    - type: SpikeArrest
+      config:
+        rate: "30pm"       # max 30 req/min (burst smoothing)
+    - type: Quota
+      config:
+        allow: "1000"
+        interval: "1"
+        timeUnit: "day"    # 1000 req/day hard cap
+```
+
+```bash
+kubectl apply -f deploy/examples/rate-limited-api.yaml
+```
+
+#### API Key authentication
+
+```yaml
+spec:
+  policies:
+    - type: VerifyAPIKey
+      config:
+        apiKeyLocation: "queryparam"   # read key from ?apikey=xxx
+        apiKeyName: "apikey"
+    - type: SpikeArrest
+      config:
+        rate: "10ps"                   # 10 req/sec after key verified
+```
+
+```bash
+# Without key → 401
+curl https://YOUR_HOSTNAME/secure/get
+
+# With valid key → 200
+curl "https://YOUR_HOSTNAME/secure/get?apikey=YOUR_KEY"
+```
+
+#### CORS headers
+
+```yaml
+spec:
+  policies:
+    - type: CORS
+      config:
+        allowOrigins: "https://app.example.com"
+        allowMethods: "GET,POST,DELETE"
+        allowHeaders: "Content-Type,Authorization"
+```
+
+#### OAuth2 token verification
+
+```yaml
+spec:
+  policies:
+    - type: OAuthV2    # validates Bearer token in Authorization header
+```
+
+> **Policy ordering matters.** Policies run in the order declared.
+> Auth policies (`VerifyAPIKey`, `OAuthV2`) should come before rate-limit policies.
+
 
 Edit the spec (e.g. change `targetUrl`) and re-apply. The operator detects the change via `metadata.generation` and uploads a new Apigee revision automatically.
 
@@ -278,6 +353,34 @@ kubectl get apigeeapi hello-api -o json | python3 -m json.tool | grep -A20 '"sta
 | `targetUrl` | string | ✅ | Backend URL — must start with `http://` or `https://` |
 | `proxyName` | string | ❌ | Custom proxy name. Defaults to the CR name |
 | `description` | string | ❌ | Free-text description shown in the Apigee console |
+| `policies` | []PolicySpec | ❌ | Ordered list of Apigee policies. See [Policy Reference](#policy-reference) |
+
+### Policy Reference
+
+Each item in `spec.policies[]` has:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `type` | string | ✅ | `Quota`, `SpikeArrest`, `VerifyAPIKey`, `CORS`, or `OAuthV2` |
+| `name` | string | ❌ | Instance name in Apigee. Defaults to `{Type}-{index}`. Must be unique. |
+| `config` | map[string]string | ❌ | Policy-specific key-value config. See table below. |
+
+**Config keys by policy type:**
+
+| Type | Key | Default | Description |
+|---|---|---|---|
+| `Quota` | `allow` | `"1000"` | Max requests per interval |
+| `Quota` | `interval` | `"1"` | Interval count |
+| `Quota` | `timeUnit` | `"minute"` | `minute` \| `hour` \| `day` \| `month` |
+| `SpikeArrest` | `rate` | `"30pm"` | `Nps` (per sec) or `Npm` (per min), e.g. `"10ps"`, `"100pm"` |
+| `VerifyAPIKey` | `apiKeyLocation` | `"queryparam"` | `queryparam` \| `header` |
+| `VerifyAPIKey` | `apiKeyName` | `"apikey"` | Query param name or header name |
+| `CORS` | `allowOrigins` | `"*"` | Allowed origin. Use `"*"` for any, or specific domain. |
+| `CORS` | `allowMethods` | `"GET,POST,PUT,DELETE,OPTIONS"` | Comma-separated HTTP methods |
+| `CORS` | `allowHeaders` | `"Content-Type,Authorization"` | Comma-separated allowed headers |
+| `OAuthV2` | _(none)_ | — | Always runs `VerifyAccessToken` operation |
+
+> Unknown policy types are **skipped with a log warning** — the proxy still deploys without that policy.
 
 ### Status Fields
 
