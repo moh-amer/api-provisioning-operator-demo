@@ -204,26 +204,36 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 		if containsFinalizer(api, FinalizerName) {
 			logger.Info("Handling deletion — cleaning up Apigee resources", "proxyName", proxyName)
 
-			if err := c.updateStatus(ctx, api, "Deleting", false, 0, "", "Cleaning up Apigee resources..."); err != nil {
+			// ① Save revision from cache NOW, before updateStatus can clear it.
+			//    Bug: updateStatus(revision=0) clears proxyRevision in the API server.
+			//    On the next retry (after restart) the cache has revision=0, undeploy
+			//    is skipped, DeleteProxy returns FAILED_PRECONDITION because the proxy
+			//    is still deployed. Fix: save + preserve the revision across retries.
+			revisionToUndeploy := api.Status.ProxyRevision
+
+			// ② Update status — pass the saved revision so it survives restarts.
+			if err := c.updateStatus(ctx, api, "Deleting", false, revisionToUndeploy, "", "Cleaning up Apigee resources..."); err != nil {
 				return err
 			}
 
-			// Undeploy from environment
-			if api.Status.ProxyRevision > 0 {
-				if err := c.apigeeClient.UndeployRevision(ctx, api.Spec.Organization, api.Spec.Environment, proxyName, api.Status.ProxyRevision); err != nil {
-					logger.Error(err, "Failed to undeploy (may already be undeployed)")
+			// ③ Undeploy from environment (required before DeleteProxy will succeed).
+			if revisionToUndeploy > 0 {
+				if err := c.apigeeClient.UndeployRevision(ctx, api.Spec.Organization, api.Spec.Environment, proxyName, revisionToUndeploy); err != nil {
+					logger.Error(err, "Failed to undeploy (may already be undeployed)", "revision", revisionToUndeploy)
 					// Continue — we still want to try deleting the proxy
 				}
+			} else {
+				logger.Info("No tracked revision to undeploy — attempting delete directly", "proxyName", proxyName)
 			}
 
-			// Delete the proxy from Apigee
+			// ④ Delete the proxy bundle from Apigee
 			if err := c.apigeeClient.DeleteProxy(ctx, api.Spec.Organization, proxyName); err != nil {
 				logger.Error(err, "Failed to delete proxy from Apigee")
 				c.recorder.Event(api, corev1.EventTypeWarning, ErrApigee, fmt.Sprintf("Failed to delete proxy: %v", err))
 				return err
 			}
 
-			// Remove finalizer — allows K8s to complete deletion
+			// ⑤ Remove finalizer — allows K8s to complete deletion
 			apiCopy := api.DeepCopy()
 			apiCopy.Finalizers = removeFinalizer(apiCopy, FinalizerName)
 			_, err := c.apigeeapiClientset.ApigeeapiV1alpha1().ApigeeAPIs(api.Namespace).Update(ctx, apiCopy, metav1.UpdateOptions{FieldManager: FieldManager})
