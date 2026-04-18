@@ -215,7 +215,7 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 			revisionToUndeploy := api.Status.ProxyRevision
 
 			// ② Update status — pass the saved revision so it survives restarts.
-			if err := c.updateStatus(ctx, api, "Deleting", false, revisionToUndeploy, "", "Cleaning up Apigee resources..."); err != nil {
+			if err := c.updateStatus(ctx, api, "Deleting", false, revisionToUndeploy, "", "Cleaning up Apigee resources...", api.Generation); err != nil {
 				return err
 			}
 
@@ -308,11 +308,11 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 	existingProxy, err := c.apigeeClient.GetProxy(ctx, api.Spec.Organization, proxyName)
 	if err != nil {
 		c.recorder.Event(api, corev1.EventTypeWarning, ErrApigee, fmt.Sprintf("Failed to check proxy: %v", err))
-		return c.updateStatus(ctx, api, "Error", false, 0, "", fmt.Sprintf("Failed to check proxy: %v", err))
+		return c.updateStatus(ctx, api, "Error", false, 0, "", fmt.Sprintf("Failed to check proxy: %v", err), api.Generation)
 	}
 
 	// ──── Step 5: Create or Update the proxy ────
-	if err := c.updateStatus(ctx, api, "Creating", false, 0, "", "Creating/updating API proxy..."); err != nil {
+	if err := c.updateStatus(ctx, api, "Creating", false, 0, "", "Creating/updating API proxy...", api.Generation); err != nil {
 		logger.Error(err, "Failed to update status to Creating")
 	}
 
@@ -321,7 +321,7 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 		api.Spec.Policies)
 	if err != nil {
 		c.recorder.Event(api, corev1.EventTypeWarning, ErrApigee, fmt.Sprintf("Failed to create proxy: %v", err))
-		return c.updateStatus(ctx, api, "Error", false, 0, "", fmt.Sprintf("Failed to create proxy: %v", err))
+		return c.updateStatus(ctx, api, "Error", false, 0, "", fmt.Sprintf("Failed to create proxy: %v", err), api.Generation)
 	}
 
 	if existingProxy != nil {
@@ -331,13 +331,13 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 	}
 
 	// ──── Step 6: Deploy revision to environment ────
-	if err := c.updateStatus(ctx, api, "Deploying", false, revision, "", fmt.Sprintf("Deploying revision %d to %s...", revision, api.Spec.Environment)); err != nil {
+	if err := c.updateStatus(ctx, api, "Deploying", false, revision, "", fmt.Sprintf("Deploying revision %d to %s...", revision, api.Spec.Environment), api.Generation); err != nil {
 		logger.Error(err, "Failed to update status to Deploying")
 	}
 
 	if err := c.apigeeClient.DeployRevision(ctx, api.Spec.Organization, api.Spec.Environment, proxyName, revision); err != nil {
 		c.recorder.Event(api, corev1.EventTypeWarning, ErrApigee, fmt.Sprintf("Failed to deploy: %v", err))
-		return c.updateStatus(ctx, api, "Error", false, revision, "", fmt.Sprintf("Failed to deploy revision %d: %v", revision, err))
+		return c.updateStatus(ctx, api, "Error", false, revision, "", fmt.Sprintf("Failed to deploy revision %d: %v", revision, err), api.Generation)
 	}
 
 	// ──── Step 7: Resolve the real public URL ────
@@ -355,7 +355,7 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 	publicURL = fmt.Sprintf("https://%s%s", hostname, api.Spec.BasePath)
 	logger.Info("Resolved public URL", "url", publicURL)
 
-	if err := c.updateStatus(ctx, api, "Ready", true, revision, publicURL, fmt.Sprintf("API proxy deployed (rev %d)", revision)); err != nil {
+	if err := c.updateStatus(ctx, api, "Ready", true, revision, publicURL, fmt.Sprintf("API proxy deployed (rev %d)", revision), api.Generation); err != nil {
 		return err
 	}
 
@@ -372,13 +372,13 @@ func (c *Controller) liveGet(ctx context.Context, namespace, name string) (*apig
 
 // updateStatus re-fetches the latest version from the API server then updates status.
 // Wrapped in RetryOnConflict so concurrent modifications don't fail the sync.
-func (c *Controller) updateStatus(ctx context.Context, api *apigeeapiv1alpha1.ApigeeAPI, phase string, deployed bool, revision int, publicURL, message string) error {
+func (c *Controller) updateStatus(ctx context.Context, api *apigeeapiv1alpha1.ApigeeAPI, phase string, deployed bool, revision int, publicURL, message string, reconciledGeneration int64) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Re-fetch fresh copy to get current resourceVersion
 		latest, err := c.liveGet(ctx, api.Namespace, api.Name)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				return nil // Object gone — nothing to update
+				return nil // Object gone -- nothing to update
 			}
 			return err
 		}
@@ -390,10 +390,11 @@ func (c *Controller) updateStatus(ctx context.Context, api *apigeeapiv1alpha1.Ap
 		if publicURL != "" {
 			latestCopy.Status.PublicURL = publicURL
 		}
-		// Record the generation we just reconciled so the idempotency guard works.
-		// Only stamp ObservedGeneration when we reach Ready state.
+		// Record the generation we ACTUALLY reconciled, not the live generation.
+		// This prevents a race where a new spec change arrives mid-reconciliation:
+		// without this, we'd stamp obsGen=newer-gen but only applied older-gen data.
 		if phase == "Ready" {
-			latestCopy.Status.ObservedGeneration = latest.Generation
+			latestCopy.Status.ObservedGeneration = reconciledGeneration
 		}
 		_, err = c.apigeeapiClientset.ApigeeapiV1alpha1().ApigeeAPIs(api.Namespace).UpdateStatus(ctx, latestCopy, metav1.UpdateOptions{FieldManager: FieldManager})
 		return err
