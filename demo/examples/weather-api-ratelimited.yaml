@@ -15,9 +15,9 @@ spec:
   policies:
     - type: SpikeArrest
       config:
-        rate: "30pm"
+        rate: "6pm"
     - type: Quota
       config:
-        allow: "1000"
+        allow: "5"
         interval: "1"
-        timeUnit: "day"
+        timeUnit: "minute"
