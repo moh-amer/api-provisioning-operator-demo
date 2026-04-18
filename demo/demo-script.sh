@@ -12,7 +12,6 @@ BASE_URL="${BASE_URL:-https://34.149.73.0.nip.io}"
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="${KUBECTL:-kubectl}"
 DEMO_EXAMPLES="./demo/examples"
-DEMO_IMAGES="./demo/images"
 
 # Run everything from repo root
 cd "$DEMO_DIR"
@@ -104,23 +103,111 @@ diagram() {
     echo ""
 }
 
-show_image() {
-    local img="$1" caption="${2:-}"
-    if command -v feh &>/dev/null; then
-        feh --scale-down --auto-zoom "$img" &
-        local pid=$!
-        [[ -n "$caption" ]] && echo -e "  ${DIM}$caption${NC}"
-        echo -en "  ${C}Press ENTER to dismiss image >${NC}  "
-        read -r
-        kill $pid 2>/dev/null || true
-    elif command -v xdg-open &>/dev/null; then
-        echo -e "  ${DIM}Image: $img${NC}"
-        [[ -n "$caption" ]] && echo -e "  ${DIM}$caption${NC}"
-        echo -en "  ${C}Press ENTER to continue >${NC}  "
-        read -r
-    else
-        [[ -n "$caption" ]] && echo -e "  ${DIM}$caption${NC}"
-    fi
+# -- ASCII Art for story moments -----------------------------------------------
+_art_prologue() {
+    echo ""
+    echo -e "${R}${BOLD}  +---------------------------+  ${G}${BOLD}+---------------------------+${NC}"
+    echo -e "${R}${BOLD}  |      THE OLD WAY          |  ${G}${BOLD}|    THE OPERATOR WAY       |${NC}"
+    echo -e "${R}${BOLD}  +---------------------------+  ${G}${BOLD}+---------------------------+${NC}"
+    echo -e "${R}  |                           |  ${G}|                           |${NC}"
+    echo -e "${R}  |  \$ gcloud apis create..   |  ${G}|  \$ kubectl apply -f api   |${NC}"
+    echo -e "${R}  |  \$ zip -r bundle.zip ..   |  ${G}|                           |${NC}"
+    echo -e "${R}  |  \$ curl -X POST import..  |  ${G}|  apiVersion: v1alpha1     |${NC}"
+    echo -e "${R}  |  \$ gcloud apis deploy..   |  ${G}|  kind: ApigeeAPI          |${NC}"
+    echo -e "${R}  |  \$ curl ... /weather ..   |  ${G}|  spec:                    |${NC}"
+    echo -e "${R}  |  \$ # update wiki, pray..  |  ${G}|    basePath: /weather      |${NC}"
+    echo -e "${R}  |                           |  ${G}|    targetUrl: wttr.in      |${NC}"
+    echo -e "${R}  |  ${BOLD}6 commands${NC}${R}                |  ${G}|                           |${NC}"
+    echo -e "${R}  |  ${BOLD}15 minutes${NC}${R}                |  ${G}|  ${BOLD}1 YAML${NC}${G}                    |${NC}"
+    echo -e "${R}  |  ${BOLD}Manual verification${NC}${R}       |  ${G}|  ${BOLD}15 seconds${NC}${G}                |${NC}"
+    echo -e "${R}  |  ${BOLD}Hope${NC}${R}                      |  ${G}|  ${BOLD}Automated${NC}${G}                 |${NC}"
+    echo -e "${R}  |                           |  ${G}|                           |${NC}"
+    echo -e "${R}  +---------------------------+  ${G}+---------------------------+${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
+}
+
+_art_launch() {
+    echo ""
+    echo -e "${C}${BOLD}         .---.                                              ${NC}"
+    echo -e "${C}${BOLD}        ( o o )    weather-api                               ${NC}"
+    echo -e "${C}${BOLD}        |  >  |                                              ${NC}"
+    echo -e "${C}${BOLD}         '---'                                               ${NC}"
+    echo -e "${DIM}           |                                                   ${NC}"
+    echo -e "${DIM}           v                                                   ${NC}"
+    echo -e "${Y}    +-- kubectl apply -f weather-api.yaml --+                  ${NC}"
+    echo -e "${DIM}           |                                                   ${NC}"
+    echo -e "${DIM}           v                                                   ${NC}"
+    echo -e "${Y}    [ Creating... ]${NC} ----> ${B}[ Deploying... ]${NC} ----> ${G}[ Ready! ]${NC}"
+    echo -e "${DIM}                                                               ${NC}"
+    echo -e "${DIM}      Proxy bundle       Apigee REST API       Traffic flows   ${NC}"
+    echo -e "${DIM}      generated           upload + deploy       /weather/London ${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
+}
+
+_art_ratelimit() {
+    echo ""
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>          ${Y}${BOLD}+===========+${NC}          ${G}${BOLD}           ${NC}"
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>    ${NC}     ${Y}${BOLD}|           |${NC}          ${G}${BOLD}   __|__   ${NC}"
+    echo -e "${R}${BOLD}  >>> 10,000 req/h >    ${NC}     ${Y}${BOLD}|  SHIELD   |${NC}   -----> ${G}${BOLD}  |     |  ${NC}"
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>    ${NC}     ${Y}${BOLD}|           |${NC}          ${G}${BOLD}  | API |  ${NC}"
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>    ${NC}     ${Y}${BOLD}| Spike: 30 |${NC}          ${G}${BOLD}  |_____|  ${NC}"
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>    ${NC}     ${Y}${BOLD}| Quota:1000|${NC}          ${G}${BOLD}           ${NC}"
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>    ${NC}     ${Y}${BOLD}|           |${NC}          ${G}${BOLD}  Backend  ${NC}"
+    echo -e "${R}${BOLD}  >>>>>>>>>>>>>>>>>>    ${NC}     ${Y}${BOLD}+===========+${NC}          ${G}${BOLD} Protected ${NC}"
+    echo ""
+    echo -e "${DIM}  Flood of requests        SpikeArrest + Quota      Only safe traffic${NC}"
+    echo -e "${DIM}  hammering backend         blocks the excess         reaches the server${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
+}
+
+_art_3am() {
+    echo ""
+    echo -e "${DIM}  .  *  .    *   .  *  .    *   .  *  .    *   .  *  .  *  ${NC}"
+    echo -e "${DIM}     *    .    *    .    *    .    *    .    *    .         ${NC}"
+    echo -e "${DIM}  .    *   3:00 AM   *    .    *    .    *    .   *   .    ${NC}"
+    echo -e "${DIM}  ........................................................${NC}"
+    echo ""
+    echo -e "${DIM}     zzZ   zzZ   zzZ              ${C}${BOLD}    +-------+           ${NC}"
+    echo -e "${DIM}    __|__ __|__ __|__              ${C}${BOLD}    |  /-\\  |           ${NC}"
+    echo -e "${DIM}   | bed || bed || bed |            ${C}${BOLD}    | | K | |           ${NC}"
+    echo -e "${DIM}   |_____||_____||_____|            ${C}${BOLD}    |  \\-/  |           ${NC}"
+    echo -e "${DIM}    Team sleeping                   ${C}${BOLD}    +---+---+           ${NC}"
+    echo -e "${DIM}                                    ${C}${BOLD}        |               ${NC}"
+    echo -e "${DIM}                                    ${C}${BOLD}    Operator             ${NC}"
+    echo -e "${DIM}                                    ${C}${BOLD}    never sleeps         ${NC}"
+    echo ""
+    echo -e "${R}    3:00:00  ${BOLD}Proxy deleted${NC}${R}         (someone made a mistake)   ${NC}"
+    echo -e "${Y}    3:00:30  ${BOLD}Drift detected${NC}${Y}        (operator reads sensor)    ${NC}"
+    echo -e "${G}    3:00:35  ${BOLD}Self-healed${NC}${G}           (proxy re-created + deployed)${NC}"
+    echo ""
+    echo -e "${G}${BOLD}    Zero humans. Zero alerts. The loop IS the recovery.     ${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
+}
+
+_art_epilogue() {
+    echo ""
+    echo -e "${BOLD}  ============= THE LIFE OF AN API ===============${NC}"
+    echo ""
+    echo -e "${G}  Birth${NC}       ${Y}Intern${NC}      ${R}Growing${NC}     ${M}Sunset${NC}      ${C}3am${NC}        ${B}Fleet${NC}"
+    echo -e "${G}   |${NC}  --------> ${Y}|${NC}  -------> ${R}|${NC}  -------> ${M}|${NC}  -------> ${C}|${NC}  ------> ${B}|${NC}"
+    echo -e "${G}   |${NC}           ${Y}|${NC}          ${R}|${NC}          ${M}|${NC}          ${C}|${NC}         ${B}|${NC}"
+    echo -e "${G}  YAML${NC}       ${Y}5 patches${NC}   ${R}+policies${NC}  ${M}Finalizer${NC}  ${C}Self-heal${NC}   ${B}4 APIs${NC}"
+    echo -e "${G}  apply${NC}      ${Y}deduped${NC}     ${R}Day 2 ops${NC}  ${M}cleanup${NC}    ${C}drift fix${NC}  ${B}parallel${NC}"
+    echo ""
+    echo -e "${DIM}  ...............................................................${NC}"
+    echo -e "${BOLD}  All automated. Zero manual steps.                            ${NC}"
+    echo -e "${DIM}  ...............................................................${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
 }
 
 # -- Helper functions for complex commands ------------------------------------
@@ -242,7 +329,7 @@ diagram "  \$ kubectl apply -f weather-api.yaml
 
   1 YAML. 15 seconds. Done."
 
-show_image "$DEMO_IMAGES/prologue.png" "The old way vs the operator way"
+_art_prologue
 
 next
 
@@ -288,7 +375,7 @@ run_step "$K apply -f $DEMO_EXAMPLES/weather-api.yaml" \
 run_watch "$K get aapi -w" \
     "Watch the phases: Creating -> Deploying -> Ready (Ctrl+C when Ready):"
 
-show_image "$DEMO_IMAGES/act1-launch.png" "The control loop brought our API to life"
+_art_launch
 
 section "It's alive -- hit the real weather API"
 
@@ -399,7 +486,7 @@ narrator "10,000 requests per hour are hammering the backend."
 say "The backend team calls: 'Our servers are melting. Add rate limiting.'"
 echo ""
 
-show_image "$DEMO_IMAGES/act3-ratelimit.png" "We need to protect the backend"
+_art_ratelimit
 
 section "This is a Day 2 operation"
 
@@ -514,7 +601,7 @@ narrator "3:00 AM. A colleague is doing quarterly cleanup."
 narrator "They open the Apigee console. They see old proxies."
 narrator "They accidentally delete... weather-api-v2."
 
-show_image "$DEMO_IMAGES/act5-3am.png" "The 3am incident"
+_art_3am
 
 say "Traffic starts returning 404. Nobody gets paged."
 say "Kubernetes still shows Phase=Ready. The status is STALE."
@@ -616,7 +703,7 @@ echo -e "${C}${BOLD}  The Moral of the Story                             ${NC}"
 echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
 echo ""
 
-show_image "$DEMO_IMAGES/epilogue.png" "The Life of an API"
+_art_epilogue
 
 echo -e "  ${BOLD}You just watched an API:${NC}"
 echo ""
