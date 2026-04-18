@@ -1,0 +1,13 @@
+# Act 6 -- "The Empire" (Fleet API 1/3)
+# Simple order processing API
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: orders-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/orders"
+  targetUrl: "https://httpbin.org"
+  description: "Orders API -- order processing service"

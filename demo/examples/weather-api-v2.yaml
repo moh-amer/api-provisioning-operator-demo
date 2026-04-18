@@ -1,0 +1,22 @@
+# Act 5 -- "The 3am Incident"
+# weather-api-v2: secured with API key + rate limiting
+# This is the API that gets accidentally deleted from Apigee
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: weather-api-v2
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/weather/v2"
+  targetUrl: "https://wttr.in"
+  description: "Weather API v2 -- secured with API key verification"
+  policies:
+    - type: VerifyAPIKey
+      config:
+        apiKeyLocation: "queryparam"
+        apiKeyName: "apikey"
+    - type: SpikeArrest
+      config:
+        rate: "10ps"

@@ -1,0 +1,23 @@
+# Act 3 -- "The Growing Pains"
+# weather-api upgraded with rate limiting after traffic spikes
+# SpikeArrest smooths bursts, Quota enforces daily cap
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: weather-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/weather"
+  targetUrl: "https://wttr.in"
+  description: "Weather Forecast API -- rate-limited after traffic spike"
+  policies:
+    - type: SpikeArrest
+      config:
+        rate: "30pm"
+    - type: Quota
+      config:
+        allow: "1000"
+        interval: "1"
+        timeUnit: "day"

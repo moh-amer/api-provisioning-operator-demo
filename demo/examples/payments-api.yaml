@@ -1,0 +1,17 @@
+# Act 6 -- "The Empire" (Fleet API 2/3)
+# Payment processing with burst protection
+apiVersion: apigee.example.com/v1alpha1
+kind: ApigeeAPI
+metadata:
+  name: payments-api
+  namespace: default
+spec:
+  organization: "project-710238f0-9aba-4085-903"
+  environment: "eval"
+  basePath: "/payments"
+  targetUrl: "https://httpbin.org"
+  description: "Payments API -- payment processing with burst protection"
+  policies:
+    - type: SpikeArrest
+      config:
+        rate: "10ps"
