@@ -379,7 +379,7 @@ _art_launch
 
 section "It's alive -- hit the real weather API"
 
-run_and_pause "curl -s ${BASE_URL}/weather/London?format=3" \
+run_and_pause "curl -s --connect-timeout 3 --max-time 5 ${BASE_URL}/weather/London?format=3" \
     "Real weather data, routed through Apigee:"
 
 run_and_pause "$K describe apigeeapi weather-api" \
@@ -512,7 +512,7 @@ section "Prove rate limiting works"
 say "Hitting the API rapidly until we get a 429 Too Many Requests..."
 echo ""
 
-run_and_pause "for i in 1 2 3 4 5 6 7 8 9 10; do printf \"Request \$i: \"; curl -s -o /dev/null -w \"%{http_code}\" ${BASE_URL}/weather/London?format=3; echo; sleep 0.3; done" \
+run_and_pause "for i in 1 2 3 4 5 6 7 8 9 10; do printf \"Request \$i: \"; curl -s --connect-timeout 3 --max-time 5 -o /dev/null -w \"%{http_code}\" ${BASE_URL}/weather/London?format=3; echo; sleep 0.3; done" \
     "10 rapid requests -- watch for 429 rate limit responses:"
 
 section "Plot twist: the product team is not happy"
