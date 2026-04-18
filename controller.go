@@ -45,6 +45,7 @@ const (
 	SuccessSynced     = "Synced"
 	MessageSynced     = "ApigeeAPI synced successfully"
 	ErrApigee         = "ErrApigee"
+	DriftDetected     = "DriftDetected"
 	FieldManager      = controllerAgentName
 )
 
@@ -110,12 +111,14 @@ func NewController(
 		UpdateFunc: func(old, new interface{}) {
 			oldAPI := old.(*apigeeapiv1alpha1.ApigeeAPI)
 			newAPI := new.(*apigeeapiv1alpha1.ApigeeAPI)
-			// Re-sync if any of these changed:
-			//   1. Spec changed        → generation bumped by K8s
-			//   2. Deletion started    → run finalizer cleanup
-			//   3. Finalizer was added → continue with Apigee sync
+			// Periodic resync: informer re-delivers the same cached object
+			// (identical ResourceVersion). Let these through so syncHandler
+			// can verify the proxy still exists on Apigee (drift detection).
+			// Status-update events have different ResourceVersions and same
+			// Generation, so they remain filtered — no infinite loop.
+			isResync := oldAPI.ResourceVersion == newAPI.ResourceVersion
 			finalizerAdded := !containsFinalizer(oldAPI, FinalizerName) && containsFinalizer(newAPI, FinalizerName)
-			if oldAPI.Generation != newAPI.Generation || newAPI.DeletionTimestamp != nil || finalizerAdded {
+			if oldAPI.Generation != newAPI.Generation || newAPI.DeletionTimestamp != nil || finalizerAdded || isResync {
 				controller.enqueueApigeeAPI(new)
 			}
 		},
@@ -247,19 +250,36 @@ func (c *Controller) syncHandler(ctx context.Context, objectRef cache.ObjectName
 		return nil
 	}
 
-	// ──── Step 3: Idempotency guard ────
-	// If we already successfully reconciled this exact spec version (same generation)
-	// and the proxy is deployed, there is nothing to do. Skip all Apigee API calls.
+	// ──── Step 3: Idempotency guard + Drift detection ────
+	// If we already successfully reconciled this spec version, verify the proxy
+	// still exists on Apigee before skipping. If someone deleted it externally
+	// (e.g. via Apigee console or gcloud), we fall through to re-create it.
 	//
-	// This is the second half of the infinite-loop fix:
-	//   - UpdateFunc (above) stops status updates from re-queuing
-	//   - This guard stops the 30s resync from re-deploying
+	// Infinite-loop safety:
+	//   - UpdateFunc filters status-update events (different ResourceVersion, same Generation)
+	//   - Only periodic resyncs (same ResourceVersion) reach here
+	//   - After re-creation, status is set to Ready + ObservedGeneration → next resync
+	//     finds proxy exists → skip. No loop.
 	if api.Status.Phase == "Ready" &&
 		api.Status.Deployed &&
 		api.Status.ObservedGeneration == api.Generation {
-		logger.V(4).Info("Already reconciled for current generation, skipping",
-			"generation", api.Generation, "proxyRevision", api.Status.ProxyRevision)
-		return nil
+		// Lightweight drift check: does the proxy still exist on Apigee?
+		existing, err := c.apigeeClient.GetProxy(ctx, api.Spec.Organization, proxyName)
+		if err != nil {
+			logger.Error(err, "Drift check failed — cannot reach Apigee API, will retry")
+			return err
+		}
+		if existing != nil {
+			// Proxy exists — no drift, skip reconciliation
+			logger.V(4).Info("Drift check passed — proxy exists on Apigee, skipping",
+				"generation", api.Generation, "proxyRevision", api.Status.ProxyRevision)
+			return nil
+		}
+		// DRIFT DETECTED: proxy was deleted externally — fall through to re-create
+		logger.Info("DRIFT DETECTED: proxy missing on Apigee — re-reconciling",
+			"proxyName", proxyName, "generation", api.Generation)
+		c.recorder.Event(api, corev1.EventTypeWarning, DriftDetected,
+			fmt.Sprintf("Proxy %q was deleted from Apigee externally — re-creating", proxyName))
 	}
 
 	// ──── Step 4: Ensure Finalizer is present ────
