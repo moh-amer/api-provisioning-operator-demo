@@ -30,7 +30,7 @@ spec:
       containers:
         - name: operator
           image: apigee-api-operator:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           args:
             - -v=2
           env:

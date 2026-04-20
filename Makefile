@@ -109,6 +109,7 @@ install: ## Install CRDs and RBAC only (no operator pod)
 .PHONY: deploy
 deploy: kind-load install ## Deploy to local kind cluster (builds + loads image locally)
 	kubectl apply -f deploy/03-operator.yaml
+	kubectl rollout restart deployment/$(BINARY_NAME) -n $(NAMESPACE)
 	kubectl rollout status deployment/$(BINARY_NAME) -n $(NAMESPACE) --timeout=90s
 	@echo ""
 	@echo "  ✅ Operator is running in kind!"
