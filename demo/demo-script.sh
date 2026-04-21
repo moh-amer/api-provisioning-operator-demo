@@ -598,7 +598,80 @@ read -r CLEANUP
 if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
     echo ""
     echo -e "  ${DIM}Running finalizers -- cleaning up Apigee resources...${NC}"
+    echo ""
+
+    # Joke: the operator doesn't want to let go
+    sleep 0.5
+    echo -e "  ${Y}  Operator:  ${BOLD}\"Wait... you're deleting ALL of them?\"${NC}"
+    sleep 1
+    echo -e "  ${Y}  Operator:  ${BOLD}\"I JUST deployed those!\"${NC}"
+    sleep 1
+    echo -e "  ${Y}  Operator:  ${BOLD}\"Fine. But I'm cleaning up properly.\"${NC}"
+    sleep 0.5
+    echo -e "  ${Y}  Operator:  ${BOLD}\"Because THAT'S what finalizers are for.\"${NC}"
+    sleep 1
+    echo ""
+
     $K delete apigeeapi --all --ignore-not-found
-    echo -e "  ${G}All demo APIs deleted from Kubernetes and Apigee${NC}"
+    echo ""
+
+    sleep 0.5
+    echo -e "  ${G}  Operator:  ${BOLD}\"All clean. No orphans. No surprise bills.\"${NC}"
+    sleep 1
+    echo -e "  ${C}  Operator:  ${BOLD}\"You know I'll just reconcile them back if you apply again...\"${NC}"
+    sleep 1
+    echo -e "  ${M}  Operator:  ${BOLD}\"I never sleep. I never forget. I always converge.\"${NC}"
+    sleep 1.5
+    echo ""
+
+    # Dramatic goodbye from the APIs
+    echo -e "${DIM}  .  *  .    *   .  *  .    *   .  *  .    *   .  *  .  *  ${NC}"
+    echo -e "${DIM}     *    .    *    .    *    .    *    .    *    .         ${NC}"
+    echo ""
+    echo -e "${R}         weather-api     ${Y}orders-api      ${B}payments-api${NC}"
+    echo -e "${R}            __|__       ${Y}    __|__       ${B}    __|__${NC}"
+    echo -e "${R}           |     |      ${Y}   |     |      ${B}   |     |${NC}"
+    echo -e "${R}           | R.I.|      ${Y}   | R.I.|      ${B}   | R.I.|${NC}"
+    echo -e "${R}           | P.  |      ${Y}   | P.  |      ${B}   | P.  |${NC}"
+    echo -e "${R}           |_____|      ${Y}   |_____|      ${B}   |_____|${NC}"
+    echo -e "${DIM}      Undeployed.       Finalized.       Cleaned up.${NC}"
+    echo ""
+    echo -e "${DIM}   No proxy was harmed without proper finalization.${NC}"
+    echo ""
+    sleep 2
 fi
+
+# -- Thank You ----------------------------------------------------------------
+clear
+echo ""
+echo ""
+echo -e "${C}${BOLD}   ╔══════════════════════════════════════════════════════╗${NC}"
+echo -e "${C}${BOLD}   ║                                                      ║${NC}"
+echo -e "${C}${BOLD}   ║${NC}   ${G}${BOLD} _____ _                 _     __   __           ${C}${BOLD}║${NC}"
+echo -e "${C}${BOLD}   ║${NC}   ${G}${BOLD}|_   _| |__   __ _ _ __ | | __ \\ \\ / /__  _   _  ${C}${BOLD}║${NC}"
+echo -e "${C}${BOLD}   ║${NC}   ${G}${BOLD}  | | | '_ \\ / _\` | '_ \\| |/ /  \\ V / _ \\| | | | ${C}${BOLD}║${NC}"
+echo -e "${C}${BOLD}   ║${NC}   ${G}${BOLD}  | | | | | | (_| | | | |   <    | | (_) | |_| | ${C}${BOLD}║${NC}"
+echo -e "${C}${BOLD}   ║${NC}   ${G}${BOLD}  |_| |_| |_|\\__,_|_| |_|_|\\_\\   |_|\\___/ \\__,_| ${C}${BOLD}║${NC}"
+echo -e "${C}${BOLD}   ║                                                      ║${NC}"
+echo -e "${C}${BOLD}   ╚══════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo ""
+echo -e "  ${BOLD}The operator pattern:${NC}"
+echo -e "  ${DIM}Write the WHAT. Let the operator handle the HOW.${NC}"
+echo ""
+echo -e "  ${DIM}┌─────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${DIM}│${NC}  ${C}${BOLD}          while true {                           ${NC}  ${DIM}│${NC}"
+echo -e "  ${DIM}│${NC}  ${C}${BOLD}              observe()                          ${NC}  ${DIM}│${NC}"
+echo -e "  ${DIM}│${NC}  ${C}${BOLD}              diff()                             ${NC}  ${DIM}│${NC}"
+echo -e "  ${DIM}│${NC}  ${C}${BOLD}              act()                              ${NC}  ${DIM}│${NC}"
+echo -e "  ${DIM}│${NC}  ${C}${BOLD}          }                                      ${NC}  ${DIM}│${NC}"
+echo -e "  ${DIM}└─────────────────────────────────────────────────────┘${NC}"
+echo ""
+echo -e "  ${Y}${BOLD}  \"The best incident is the one nobody noticed.\"${NC}"
+echo -e "  ${DIM}                          — Every operator, at 3am${NC}"
+echo ""
+echo ""
+echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 54))${NC}"
+echo -e "  ${M}${BOLD}  Questions?  Let's talk.${NC}"
+echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 54))${NC}"
 echo ""
