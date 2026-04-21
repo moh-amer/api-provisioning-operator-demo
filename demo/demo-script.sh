@@ -78,12 +78,11 @@ next() {
 }
 
 act() {
-    local num="$1" title="$2" timer="${3:-}"
+    local title="$1"
     clear
     echo ""
     echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
-    printf "${C}${BOLD}  Act %s -- %-44s${NC}\n" "$num" "$title"
-    [[ -n "$timer" ]] && printf "${DIM}  %-54s${NC}\n" "$timer"
+    printf "${C}${BOLD}  %-54s${NC}\n" "$title"
     echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
     echo ""
 }
@@ -288,12 +287,12 @@ echo -e "${DIM}  A Kubernetes Operator Story  |  30 min              ${NC}"
 echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
 echo ""
 echo -e "  ${BOLD}The Story:${NC}"
-echo -e "  ${DIM}Act 1. The Birth -- deploying the weather API${NC}"
-echo -e "  ${DIM}Act 2. The Eager Intern -- idempotency saves the day${NC}"
-echo -e "  ${DIM}Act 3. Growing Pains -- adding rate limiting live${NC}"
-echo -e "  ${DIM}Act 4. The Sunset -- decommissioning with finalizers${NC}"
-echo -e "  ${DIM}Act 5. The 3am Incident -- drift detection${NC}"
-echo -e "  ${DIM}Act 6. The Empire -- scaling to a fleet${NC}"
+echo -e "  ${DIM}1. The Birth -- deploying the weather API${NC}"
+echo -e "  ${DIM}2. The Eager Intern -- idempotency saves the day${NC}"
+echo -e "  ${DIM}3. Growing Pains -- adding rate limiting live${NC}"
+echo -e "  ${DIM}4. The Sunset -- decommissioning with finalizers${NC}"
+echo -e "  ${DIM}5. The 3am Incident -- drift detection${NC}"
+echo -e "  ${DIM}6. The Empire -- scaling to a fleet${NC}"
 echo ""
 echo -en "  ${C}Press ENTER to begin the story >${NC}  "
 read -r
@@ -304,7 +303,7 @@ sleep 1
 
 # -- Prologue narration -------------------------------------------------------
 narrator "Monday morning. 9:17 AM."
-say "Slack notification from the product team:"
+say "Teams notification from the product team:"
 echo ""
 echo -e "  ${BOLD}${R}@channel${NC} ${BOLD}We need a weather API live on Apigee by end of day.${NC}"
 echo -e "  ${BOLD}Backend: https://wttr.in  |  Priority: HIGH${NC}"
@@ -319,7 +318,7 @@ diagram "  \$ gcloud apigee apis create weather-api ...
   \$ curl -X POST .../apis?action=import -F file=@proxy-bundle.zip
   \$ gcloud apigee apis deploy --api=weather-api --revision=1 ...
   \$ curl https://gateway/weather/London   # pray it works
-  \$ # ... update the wiki, Slack the team, hope nothing breaks
+  \$ # ... update the wiki, Teams the team, hope nothing breaks
 
   6 commands. 15 minutes. Manual verification. Hope."
 
@@ -336,7 +335,7 @@ next
 # =============================================================================
 # ACT 1 -- THE BIRTH
 # =============================================================================
-act "1" "The Birth" "0:00 -> 5:00"
+act "The Birth"
 
 narrator "Let's deploy this API."
 
@@ -406,7 +405,7 @@ next
 # =============================================================================
 # ACT 2 -- THE EAGER INTERN
 # =============================================================================
-act "2" "The Eager Intern" "5:00 -> 12:00"
+act "The Eager Intern"
 
 narrator "The API is live! The team celebrates."
 narrator "Then... the intern notices a typo in the description."
@@ -460,7 +459,7 @@ run_step "_fire_dedup_patches" \
 run_and_pause "sleep 20 && _dedup_check" \
     "Compare revisions -- deduplication proof:"
 
-section "Plot twist"
+section "Level-triggered insight"
 
 narrator "Wait -- the intern also changed the basePath by accident."
 
@@ -478,7 +477,7 @@ next
 # =============================================================================
 # ACT 3 -- GROWING PAINS
 # =============================================================================
-act "3" "Growing Pains" "12:00 -> 17:00"
+act "Growing Pains"
 
 narrator "Weeks pass. The weather API is a hit."
 narrator "10,000 requests per hour are hammering the backend."
@@ -515,7 +514,7 @@ echo ""
 run_and_pause "for i in 1 2 3 4 5 6 7 8 9 10; do printf \"Request \$i: \"; curl -s --connect-timeout 3 --max-time 5 -o /dev/null -w \"%{http_code}\" ${BASE_URL}/weather/London?format=3; echo; sleep 0.3; done" \
     "10 rapid requests -- watch for 429 rate limit responses:"
 
-section "Plot twist: the product team is not happy"
+section "The product team pushes back"
 
 narrator "'Why are customers getting 429 errors?!'"
 
@@ -534,7 +533,7 @@ next
 # =============================================================================
 # ACT 4 -- THE SUNSET
 # =============================================================================
-act "4" "The Sunset" "17:00 -> 22:00"
+act "The Sunset"
 
 narrator "Months pass. Weather API v2 is in development."
 narrator "Time to decommission v1."
@@ -583,7 +582,7 @@ next
 # =============================================================================
 # ACT 5 -- THE 3AM INCIDENT
 # =============================================================================
-act "5" "The 3am Incident" "22:00 -> 28:00"
+act "The 3am Incident"
 
 narrator "Weather API v2 is deployed. Secured with API key verification."
 narrator "The team goes home. Everything is fine."
@@ -631,7 +630,7 @@ run_and_pause "$K get aapi" \
 run_and_pause "$K describe apigeeapi weather-api-v2 | tail -15" \
     "Events tell the story -- DriftDetected then Synced:"
 
-section "Plot twist: nobody noticed"
+section "Nobody noticed"
 
 narrator "The colleague wakes up the next morning."
 narrator "Checks their email. No PagerDuty alert. No incident report."
@@ -657,7 +656,7 @@ next
 # =============================================================================
 # ACT 6 -- THE EMPIRE
 # =============================================================================
-act "6" "The Empire" "28:00 -> 32:00"
+act "The Empire"
 
 narrator "The weather API was a success."
 narrator "Now the team is building a platform: orders, payments, notifications."
@@ -707,12 +706,12 @@ _art_epilogue
 
 echo -e "  ${BOLD}You just watched an API:${NC}"
 echo ""
-echo -e "  ${G}Act 1${NC}  Be born from a single YAML"
-echo -e "  ${Y}Act 2${NC}  Survive an intern's 5 rapid patches"
-echo -e "  ${R}Act 3${NC}  Get rate-limited when traffic spiked"
-echo -e "  ${M}Act 4${NC}  Be decommissioned with guaranteed cleanup"
-echo -e "  ${C}Act 5${NC}  Come back from the dead at 3am"
-echo -e "  ${B}Act 6${NC}  Scale to a fleet of services"
+echo -e "  ${G}1.${NC}  Be born from a single YAML"
+echo -e "  ${Y}2.${NC}  Survive an intern's 5 rapid patches"
+echo -e "  ${R}3.${NC}  Get rate-limited when traffic spiked"
+echo -e "  ${M}4.${NC}  Be decommissioned with guaranteed cleanup"
+echo -e "  ${C}5.${NC}  Come back from the dead at 3am"
+echo -e "  ${B}6.${NC}  Scale to a fleet of services"
 echo ""
 echo -e "  ${BOLD}All without a single manual step.${NC}"
 echo ""
@@ -720,7 +719,7 @@ echo -e "  ${DIM}The operator is the thermostat.${NC}"
 echo -e "  ${DIM}It reads the sensor. It converges. It does not sleep.${NC}"
 echo ""
 echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
-echo -e "  ${BOLD}Q&A                                          3 min${NC}"
+echo -e "  ${BOLD}Q&A${NC}"
 echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
 echo ""
 
