@@ -339,8 +339,7 @@ act "The Birth"
 
 narrator "Let's deploy this API."
 
-say "An operator is a controller that manages a custom resource."
-say "Think of it like a thermostat, but for infrastructure:"
+say "An operator works like a thermostat for infrastructure:"
 echo ""
 
 diagram "  Thermostat:                        Operator:
@@ -350,17 +349,14 @@ diagram "  Thermostat:                        Operator:
   Action:  turn on heater           Action:  create + deploy proxy
   Loop:    check again in 30s       Loop:    check again in 30s
 
-  The thermostat does not remember events.
-  It reads the thermometer. If the room is cold, it acts.
-  An operator works the same way."
+  It reads the sensor. If reality != desired, it acts."
 
 section "The YAML -- this is ALL you write"
 
 run_and_pause "cat $DEMO_EXAMPLES/weather-api.yaml" \
     "The complete API specification:"
 
-say "5 fields. Organization, environment, basePath, targetUrl, description."
-say "Kubernetes validates this BEFORE the operator even sees it."
+say "5 fields. Kubernetes validates this before the operator even sees it."
 echo ""
 
 section "Deploy it"
@@ -384,21 +380,17 @@ run_and_pause "curl -s --connect-timeout 3 --max-time 5 ${BASE_URL}/weather/Lond
 run_and_pause "$K describe apigeeapi weather-api" \
     "Full status -- the operator reports everything:"
 
-section "How did that work? The control loop."
+section "The control loop"
 
-diagram "  OBSERVE -> DIFF -> ACT -> repeat forever
+diagram "  OBSERVE -> DIFF -> ACT -> repeat
 
-  1. Informer watches the Kubernetes API via TCP stream (not polling)
-  2. Your 'kubectl apply' triggers an ADDED event
-  3. Event handler enqueues the KEY: 'default/weather-api'
-  4. Worker pops the key, reads CURRENT state from cache
-  5. Diff: desired=proxy on Apigee, actual=no proxy -> ACT
-  6. Creates proxy bundle, uploads to Apigee, deploys, updates status
-  7. Done. Loops back. Waits for next trigger."
+  1. Informer watches K8s API via TCP stream
+  2. kubectl apply triggers an event -> key enqueued
+  3. Worker reads CURRENT state from cache
+  4. Diff: desired=proxy on Apigee, actual=none -> ACT
+  5. Creates bundle, uploads, deploys, updates status"
 
-say "The worker reads CURRENT state -- not the event payload."
-say "This is what makes it level-triggered, like the thermostat."
-say "It does not care what CHANGED. It reads what IS."
+say "Key point: it reads what IS, not what changed. Level-triggered."
 
 next
 
@@ -407,45 +399,25 @@ next
 # =============================================================================
 act "The Eager Intern"
 
-narrator "The API is live! The team celebrates."
-narrator "Then... the intern notices a typo in the description."
-
-say "They patch it. Wait, that was wrong too. Patch again."
-say "And again. 5 times in 10 seconds."
-echo ""
+narrator "The intern notices a typo. Patches it. Wrong again. 5 patches in 10 seconds."
 
 ask "What happens when you update a CR 5 times in 10 seconds?"
 
-say "In an early version of this operator, each update triggered a full sync."
-say "Each sync created a NEW revision on Apigee."
+say "Without guards, each update creates a new Apigee revision."
 echo ""
 
-diagram "  The bug:
-  syncHandler runs -> updateStatus -> triggers Update event
-  -> UpdateFunc fires -> enqueue -> syncHandler runs again
-  -> createProxy -> NEW revision -> updateStatus -> ...
+diagram "  The bug (early version):
+  updateStatus -> triggers Update event -> re-enqueue -> new revision -> ...
 
-  Result: 93 proxy revisions created in 3 minutes.
-  Apigee was NOT happy."
+  Result: 93 revisions in 3 minutes."
 
 section "The fix: generation + deduplication"
 
-say "Fix 1: UpdateFunc only re-enqueues if spec changed (generation bump)."
-say "Status-only writes do NOT increment generation. Loop broken."
-echo ""
-say "Fix 2: The workqueue stores KEYS, not objects."
-say "If 5 events arrive for the same key while the worker is busy,"
-say "the queue holds ONE entry. Worker reads CURRENT state. Syncs ONCE."
+say "Fix 1: Only re-enqueue on spec changes (generation bump). Status writes are filtered."
+say "Fix 2: Workqueue stores KEYS, not objects. Same key = one entry."
 echo ""
 
-diagram "  Intern patches 5 times:
-  Patch 1 -->  queue: [default/weather-api]   <- worker grabs this
-  Patch 2 -->  queue: [default/weather-api]   <- arrives while busy
-  Patch 3 -->  queue: [default/weather-api]   <- same key, deduped
-  Patch 4 -->  queue: [default/weather-api]   <- same key, deduped
-  Patch 5 -->  queue: [default/weather-api]   <- same key, deduped
-
-  Worker finishes sync 1, pops key ONCE more, reads latest state.
+diagram "  5 patches -> queue holds 1 key -> worker reads latest state -> syncs ONCE
   Result: 5 patches, ~2 Apigee API calls (not 5)."
 
 section "Live: let the intern loose"
@@ -461,16 +433,9 @@ run_and_pause "sleep 20 && _dedup_check" \
 
 section "Level-triggered insight"
 
-narrator "Wait -- the intern also changed the basePath by accident."
-
-say "But here is the key insight: the operator is LEVEL-TRIGGERED."
-say "It reads the CURRENT state, not the event that triggered it."
-say "If the intern's last patch had the wrong basePath,"
-say "the operator deployed that -- because that IS the desired state now."
-echo ""
-say "Edge-triggered systems replay events in order."
-say "Level-triggered systems read the thermometer. Last state wins."
-say "To fix: apply the correct YAML. The operator converges again."
+say "What if the intern's last patch had the wrong basePath?"
+say "The operator deployed it -- because that IS the desired state."
+say "Last state wins. To fix: apply the correct YAML. It converges again."
 
 next
 
@@ -479,19 +444,13 @@ next
 # =============================================================================
 act "Growing Pains"
 
-narrator "Weeks pass. The weather API is a hit."
-narrator "10,000 requests per hour are hammering the backend."
-
-say "The backend team calls: 'Our servers are melting. Add rate limiting.'"
-echo ""
+narrator "10,000 requests/hour. The backend team says: add rate limiting."
 
 _art_ratelimit
 
-section "This is a Day 2 operation"
+section "Day 2 operation"
 
-say "The API is already running in production."
-say "We need to add policies WITHOUT redeploying from scratch."
-say "Just update the YAML and re-apply."
+say "API is in production. Just add policies to the YAML and re-apply."
 echo ""
 
 run_and_pause "cat $DEMO_EXAMPLES/weather-api-ratelimited.yaml" \
@@ -518,15 +477,13 @@ section "The product team pushes back"
 
 narrator "'Why are customers getting 429 errors?!'"
 
-say "You open kubectl describe and show them the policies."
-say "SpikeArrest: 30 per minute. Quota: 1000 per day. All in the spec."
-say "The YAML is the source of truth. Not a wiki page. Not someone's memory."
+say "The YAML is the source of truth. Show them the policies:"
 echo ""
 
 run_and_pause "$K get apigeeapi weather-api -o jsonpath='{.spec.policies}' | python3 -m json.tool" \
-    "The policies, straight from the Kubernetes API:"
+    "Policies straight from the Kubernetes API:"
 
-say "Crisis averted. Operators handle Day 2 operations, not just Day 1."
+say "Operators handle Day 2, not just Day 1."
 
 next
 
@@ -535,29 +492,15 @@ next
 # =============================================================================
 act "The Sunset"
 
-narrator "Months pass. Weather API v2 is in development."
-narrator "Time to decommission v1."
+narrator "Time to decommission v1. But Apigee proxies live outside the cluster."
 
-say "When you delete a Pod, Kubernetes garbage-collects its children."
-say "But Apigee proxies live OUTSIDE the cluster -- on Google Cloud."
-say "Kubernetes GC cannot reach them."
+say "Kubernetes GC can't reach them. Without a finalizer, you get orphans."
 echo ""
 
-diagram "  Without Finalizer:
-  kubectl delete apigeeapi weather-api
-  -> K8s object gone
-  -> Apigee proxy still running on GCP
-  -> Orphaned. Costs money. Forever.
-
-  With Finalizer:
-  kubectl delete apigeeapi weather-api
-  -> K8s sets DeletionTimestamp (object paused, not deleted yet)
-  -> Operator sees DeletionTimestamp
-  -> Calls Apigee REST API: undeploy + delete proxy
-  -> Removes finalizer
-  -> K8s completes deletion
-
-  No orphans. No surprise bills."
+diagram "  Without Finalizer:               With Finalizer:
+  kubectl delete -> K8s gone       kubectl delete -> DeletionTimestamp set
+  Apigee proxy still running       Operator: undeploy + delete on Apigee
+  Orphaned. Costs money.           Remove finalizer -> K8s completes deletion"
 
 section "Watch the finalizer in action"
 
@@ -570,12 +513,10 @@ run_and_pause "$K delete apigeeapi weather-api" \
 run_and_pause "$K get aapi" \
     "Gone from Kubernetes AND Apigee:"
 
-ask "What if the operator crashes DURING the finalizer?"
+ask "What if the operator crashes mid-finalizer?"
 
-say "The thermostat analogy: restart the operator, it reads state."
-say "DeletionTimestamp is STILL set on the object. The finalizer re-runs."
-say "No event needed. No crash recovery logic. The loop IS the recovery."
-say "This is why finalizers MUST be idempotent -- they may run more than once."
+say "DeletionTimestamp persists. On restart, the finalizer re-runs."
+say "The loop IS the recovery. Finalizers must be idempotent."
 
 next
 
@@ -584,8 +525,7 @@ next
 # =============================================================================
 act "The 3am Incident"
 
-narrator "Weather API v2 is deployed. Secured with API key verification."
-narrator "The team goes home. Everything is fine."
+narrator "V2 deployed. Team goes home."
 
 run_step "$K apply -f $DEMO_EXAMPLES/weather-api-v2.yaml" \
     "Deploy weather-api-v2 with API key security:"
@@ -594,29 +534,18 @@ run_watch "$K get aapi -w" \
     "Wait for Ready (Ctrl+C when Ready):"
 
 run_and_pause "$K get aapi" \
-    "Production state -- v2 is live and secured:"
+    "Production state -- v2 is live:"
 
-narrator "3:00 AM. A colleague is doing quarterly cleanup."
-narrator "They open the Apigee console. They see old proxies."
-narrator "They accidentally delete... weather-api-v2."
+narrator "3:00 AM. A colleague accidentally deletes weather-api-v2 from the Apigee console."
 
 _art_3am
 
-say "Traffic starts returning 404. Nobody gets paged."
-say "Kubernetes still shows Phase=Ready. The status is STALE."
-echo ""
-say "An edge-triggered webhook would never catch this."
-say "Nobody told Kubernetes. No event was fired."
-echo ""
-say "But the thermostat does not need an event."
-say "Every 30 seconds, it reads the sensor: does the proxy exist?"
-say "If not -- re-create it. Automatically."
+say "No event was fired to Kubernetes. An edge-triggered system would never notice."
+say "But every 30 seconds, the operator checks: does the proxy exist? If not -- re-create."
 
 section "Watch it happen live"
 
-say "I am going to switch to the Apigee console and delete the proxy."
-say "Watch the operator logs here. Within 30 seconds, you will see:"
-say "DRIFT DETECTED -> re-create -> deploy -> Ready."
+say "I'll delete the proxy from Apigee. Watch the logs for: DRIFT DETECTED -> re-create -> Ready."
 echo ""
 
 run_watch "$K logs -n apigee-api-operator-system -l app=apigee-api-operator -f --tail=1" \
@@ -632,24 +561,13 @@ run_and_pause "$K describe apigeeapi weather-api-v2 | tail -15" \
 
 section "Nobody noticed"
 
-narrator "The colleague wakes up the next morning."
-narrator "Checks their email. No PagerDuty alert. No incident report."
-narrator "They have no idea they caused an outage."
-narrator "Because there WAS no outage. The operator fixed it in 5 seconds."
+narrator "Next morning. No PagerDuty. No incident report. There was no outage."
 
 say "Zero humans. Zero alerts. The loop IS the recovery."
 echo ""
 
-diagram "  1. Proxy deleted outside Kubernetes
-  2. 30 seconds later: informer periodic resync
-  3. Operator calls GetProxy -- 404 Not Found
-  4. DRIFT DETECTED -- warning event emitted
-  5. CreateProxyWithBundle -- new revision uploaded
-  6. DeployRevision -- deployed to environment
-  7. Status: Phase=Ready, Deployed=true
-
-  Total recovery time: ~5 seconds after detection
-  Human intervention required: ZERO"
+diagram "  Proxy deleted -> resync detects 404 -> re-create -> deploy -> Ready
+  Recovery: ~5 seconds. Human intervention: ZERO"
 
 next
 
@@ -658,11 +576,9 @@ next
 # =============================================================================
 act "The Empire"
 
-narrator "The weather API was a success."
-narrator "Now the team is building a platform: orders, payments, notifications."
+narrator "Platform is growing: orders, payments, notifications."
 
-say "One operator binary. N resources. Each API is a YAML file in git."
-say "Platform team owns the operator. App teams own the YAMLs."
+say "One operator. N APIs. Each is a YAML in git. Platform team owns the operator, app teams own the YAMLs."
 echo ""
 
 section "Deploy the fleet"
@@ -687,8 +603,7 @@ run_and_pause "$K get apigeeapi payments-api -o jsonpath='{.spec.policies}' | py
 run_and_pause "$K get apigeeapi notifications-api -o jsonpath='{.spec.policies}' | python3 -m json.tool" \
     "Notifications API -- daily quota cap:"
 
-say "Each team defines their own policies in their own YAML."
-say "The operator enforces them uniformly. GitOps-ready."
+say "Each team owns their policies. The operator enforces them uniformly. GitOps-ready."
 
 next
 
