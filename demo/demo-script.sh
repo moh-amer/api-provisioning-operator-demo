@@ -621,10 +621,12 @@ if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
     echo -e "  ${C}  Operator:  ${BOLD}\"You know I'll just reconcile them back if you apply again...\"${NC}"
     sleep 1
     echo -e "  ${M}  Operator:  ${BOLD}\"I never sleep. I never forget. I always converge.\"${NC}"
-    sleep 1.5
     echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
 
     # Dramatic goodbye from the APIs
+    echo ""
     echo -e "${DIM}  .  *  .    *   .  *  .    *   .  *  .    *   .  *  .  *  ${NC}"
     echo -e "${DIM}     *    .    *    .    *    .    *    .    *    .         ${NC}"
     echo ""
@@ -638,7 +640,8 @@ if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
     echo ""
     echo -e "${DIM}   No proxy was harmed without proper finalization.${NC}"
     echo ""
-    sleep 2
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
 fi
 
 # -- Thank You ----------------------------------------------------------------
@@ -668,7 +671,7 @@ echo -e "  ${DIM}│${NC}  ${C}${BOLD}          }                               
 echo -e "  ${DIM}└─────────────────────────────────────────────────────┘${NC}"
 echo ""
 echo -e "  ${Y}${BOLD}  \"The best incident is the one nobody noticed.\"${NC}"
-echo -e "  ${DIM}                          — Every operator, at 3am${NC}"
+echo -e "  ${DIM}                          — A wise operator said at 3am${NC}"
 echo ""
 echo ""
 echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 54))${NC}"
