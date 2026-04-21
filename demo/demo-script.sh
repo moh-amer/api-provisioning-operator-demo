@@ -435,8 +435,8 @@ narrator "'Why are customers getting 429 errors?!'"
 say "The YAML is the source of truth. Show them the policies:"
 echo ""
 
-run_and_pause "$K get apigeeapi weather-api -o jsonpath='{.spec.policies}' | python3 -m json.tool" \
-    "Policies straight from the Kubernetes API:"
+run_and_pause "$K get apigeeapi weather-api -o yaml" \
+    "Full resource -- see the policies in the spec:"
 
 say "Operators handle Day 2, not just Day 1."
 
@@ -459,8 +459,8 @@ diagram "  Without Finalizer:               With Finalizer:
 
 section "Watch the finalizer in action"
 
-run_and_pause "$K get apigeeapi weather-api -o jsonpath='{.metadata.finalizers}' && echo" \
-    "The finalizer is registered on the object:"
+run_and_pause "$K get apigeeapi weather-api -o yaml" \
+    "Full resource -- notice the finalizer in metadata:"
 
 run_and_pause "$K delete apigeeapi weather-api" \
     "Delete -- watch it BLOCK until Apigee is cleaned up:"
@@ -552,11 +552,11 @@ run_and_pause "$K get aapi" \
 
 section "Each API has its own policies"
 
-run_and_pause "$K get apigeeapi payments-api -o jsonpath='{.spec.policies}' | python3 -m json.tool" \
-    "Payments API -- burst protection with SpikeArrest:"
+run_and_pause "$K get apigeeapi payments-api -o yaml" \
+    "Payments API -- see the SpikeArrest policy in the spec:"
 
-run_and_pause "$K get apigeeapi notifications-api -o jsonpath='{.spec.policies}' | python3 -m json.tool" \
-    "Notifications API -- daily quota cap:"
+run_and_pause "$K get apigeeapi notifications-api -o yaml" \
+    "Notifications API -- see the Quota policy in the spec:"
 
 say "Each team owns their policies. The operator enforces them uniformly. GitOps-ready."
 
