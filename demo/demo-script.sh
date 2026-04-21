@@ -288,11 +288,10 @@ echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
 echo ""
 echo -e "  ${BOLD}The Story:${NC}"
 echo -e "  ${DIM}1. The Birth -- deploying the weather API${NC}"
-echo -e "  ${DIM}2. The Eager Intern -- idempotency saves the day${NC}"
-echo -e "  ${DIM}3. Growing Pains -- adding rate limiting live${NC}"
-echo -e "  ${DIM}4. The Sunset -- decommissioning with finalizers${NC}"
-echo -e "  ${DIM}5. The 3am Incident -- drift detection${NC}"
-echo -e "  ${DIM}6. The Empire -- scaling to a fleet${NC}"
+echo -e "  ${DIM}2. Growing Pains -- adding rate limiting live${NC}"
+echo -e "  ${DIM}3. The Sunset -- decommissioning with finalizers${NC}"
+echo -e "  ${DIM}4. The 3am Incident -- drift detection${NC}"
+echo -e "  ${DIM}5. The Empire -- scaling to a fleet${NC}"
 echo ""
 echo -en "  ${C}Press ENTER to begin the story >${NC}  "
 read -r
@@ -391,51 +390,6 @@ diagram "  OBSERVE -> DIFF -> ACT -> repeat
   5. Creates bundle, uploads, deploys, updates status"
 
 say "Key point: it reads what IS, not what changed. Level-triggered."
-
-next
-
-# =============================================================================
-# ACT 2 -- THE EAGER INTERN
-# =============================================================================
-act "The Eager Intern"
-
-narrator "The intern notices a typo. Patches it. Wrong again. 5 patches in 10 seconds."
-
-ask "What happens when you update a CR 5 times in 10 seconds?"
-
-say "Without guards, each update creates a new Apigee revision."
-echo ""
-
-diagram "  The bug (early version):
-  updateStatus -> triggers Update event -> re-enqueue -> new revision -> ...
-
-  Result: 93 revisions in 3 minutes."
-
-section "The fix: generation + deduplication"
-
-say "Fix 1: Only re-enqueue on spec changes (generation bump). Status writes are filtered."
-say "Fix 2: Workqueue stores KEYS, not objects. Same key = one entry."
-echo ""
-
-diagram "  5 patches -> queue holds 1 key -> worker reads latest state -> syncs ONCE
-  Result: 5 patches, ~2 Apigee API calls (not 5)."
-
-section "Live: let the intern loose"
-
-run_step "_save_dedup_baseline" \
-    "Record the current revision:"
-
-run_step "_fire_dedup_patches" \
-    "Fire 5 patches simultaneously (the intern goes wild):"
-
-run_and_pause "sleep 20 && _dedup_check" \
-    "Compare revisions -- deduplication proof:"
-
-section "Level-triggered insight"
-
-say "What if the intern's last patch had the wrong basePath?"
-say "The operator deployed it -- because that IS the desired state."
-say "Last state wins. To fix: apply the correct YAML. It converges again."
 
 next
 
@@ -622,11 +576,10 @@ _art_epilogue
 echo -e "  ${BOLD}You just watched an API:${NC}"
 echo ""
 echo -e "  ${G}1.${NC}  Be born from a single YAML"
-echo -e "  ${Y}2.${NC}  Survive an intern's 5 rapid patches"
-echo -e "  ${R}3.${NC}  Get rate-limited when traffic spiked"
-echo -e "  ${M}4.${NC}  Be decommissioned with guaranteed cleanup"
-echo -e "  ${C}5.${NC}  Come back from the dead at 3am"
-echo -e "  ${B}6.${NC}  Scale to a fleet of services"
+echo -e "  ${Y}2.${NC}  Get rate-limited when traffic spiked"
+echo -e "  ${R}3.${NC}  Be decommissioned with guaranteed cleanup"
+echo -e "  ${M}4.${NC}  Come back from the dead at 3am"
+echo -e "  ${C}5.${NC}  Scale to a fleet of services"
 echo ""
 echo -e "  ${BOLD}All without a single manual step.${NC}"
 echo ""
