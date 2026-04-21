@@ -379,17 +379,18 @@ run_and_pause "curl -s --connect-timeout 3 --max-time 5 ${BASE_URL}/weather/Lond
 run_and_pause "$K describe apigeeapi weather-api" \
     "Full status -- the operator reports everything:"
 
-section "The control loop"
+section "How did that work?"
 
-diagram "  OBSERVE -> DIFF -> ACT -> repeat
+say "Let's look at what the operator actually did:"
+echo ""
 
-  1. Informer watches K8s API via TCP stream
-  2. kubectl apply triggers an event -> key enqueued
-  3. Worker reads CURRENT state from cache
-  4. Diff: desired=proxy on Apigee, actual=none -> ACT
-  5. Creates bundle, uploads, deploys, updates status"
+run_and_pause "$K logs -n apigee-api-operator-system -l app=apigee-api-operator --tail=15" \
+    "The operator's own log -- the real story:"
 
-say "Key point: it reads what IS, not what changed. Level-triggered."
+diagram "  You wrote YAML.
+  The operator saw it, built the proxy, uploaded it, deployed it.
+  If you delete the YAML, it cleans up. If someone breaks it, it fixes it.
+  That's the entire pattern: OBSERVE -> DIFF -> ACT -> repeat."
 
 next
 
