@@ -143,9 +143,9 @@ func runGenerate(args []string) {
 	autoApply := flags["apply"] == "true"
 
 	// Call OpenAI
-	spec, err := callOpenAI(context.Background(), apiKey, cfg.OpenAI.Model, prompt)
+	spec, err := callOpenAI(context.Background(), apiKey, cfg.OpenAI.Model, prompt, autoApply)
 	if err != nil {
-		fmt.Printf("\n  \033[31m✗ OpenAI error: %v\033[0m\n\n", err)
+		fmt.Fprintf(os.Stderr, "\n  \033[31m✗ OpenAI error: %v\033[0m\n\n", err)
 		os.Exit(1)
 	}
 
@@ -164,7 +164,8 @@ func runGenerate(args []string) {
 }
 
 // callOpenAI calls the OpenAI API with structured output to generate an APISpec.
-func callOpenAI(ctx context.Context, apiKey, model, prompt string) (*APISpec, error) {
+// When pipeMode is true, all status output goes to stderr so stdout stays clean for piping.
+func callOpenAI(ctx context.Context, apiKey, model, prompt string, pipeMode bool) (*APISpec, error) {
 	// Set API key in env for the SDK
 	os.Setenv("OPENAI_API_KEY", apiKey)
 	client := openai.NewClient()
@@ -173,7 +174,11 @@ func callOpenAI(ctx context.Context, apiKey, model, prompt string) (*APISpec, er
 		model = "gpt-4o-mini"
 	}
 
-	showSpinner("Generating ApigeeAPI from your description")
+	if pipeMode {
+		fmt.Fprintf(os.Stderr, "  🤖 Generating YAML...\n")
+	} else {
+		showSpinner("Generating ApigeeAPI from your description")
+	}
 
 	schemaParam := openai.ResponseFormatJSONSchemaJSONSchemaParam{
 		Name:        "apigee_api_spec",
@@ -193,11 +198,17 @@ func callOpenAI(ctx context.Context, apiKey, model, prompt string) (*APISpec, er
 		Model: model,
 	})
 	if err != nil {
-		clearSpinner()
+		if !pipeMode {
+			clearSpinner()
+		}
 		return nil, fmt.Errorf("API call failed: %w", err)
 	}
 
-	clearSpinner()
+	if !pipeMode {
+		clearSpinner()
+	} else {
+		fmt.Fprintf(os.Stderr, "  ✓ Done\n")
+	}
 
 	if len(chat.Choices) == 0 {
 		return nil, fmt.Errorf("no response from OpenAI")
