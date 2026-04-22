@@ -45,10 +45,10 @@ push: docker-build ## Build AND push to registry. Usage: make push REGISTRY=gcr.
 
 # ── CLI Tool (AI-powered YAML generator) ─────────────────────────────────────
 .PHONY: build-cli
-build-cli: ## Build and install apictl CLI to /usr/local/bin
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o apictl ./cmd/apictl/
-	sudo cp apictl /usr/local/bin/apictl
-	@echo "✓ apictl installed to /usr/local/bin"
+build-cli: ## Build and install apilot CLI to /usr/local/bin
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o apilot ./cmd/apilot/
+	sudo cp apilot /usr/local/bin/apilot
+	@echo "✓ apilot installed to /usr/local/bin"
 
 .PHONY: install-cli
 install-cli: build-cli ## Same as build-cli (alias)

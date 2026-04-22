@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config holds all user configuration for apictl.
+// Config holds all user configuration for apilot.
 type Config struct {
 	OpenAI   OpenAIConfig   `yaml:"openai"`
 	Defaults DefaultsConfig `yaml:"defaults"`
@@ -46,7 +46,7 @@ func defaultConfig() Config {
 // configPath returns the path to the config file.
 func configPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "apictl", "config.yaml")
+	return filepath.Join(home, ".config", "apilot", "config.yaml")
 }
 
 // loadConfig loads config from file, env vars, and flags (in priority order).
@@ -158,7 +158,7 @@ func runConfigure() {
 	cfg := loadConfig(nil)
 
 	fmt.Println()
-	fmt.Println("  \033[1m⚙️  apictl configuration\033[0m")
+	fmt.Println("  \033[1m⚙️  apilot configuration\033[0m")
 	fmt.Println()
 
 	// API key

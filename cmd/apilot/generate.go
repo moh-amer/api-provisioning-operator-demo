@@ -107,7 +107,7 @@ func runGenerate(args []string) {
 		fmt.Println("    1. export OPENAI_API_KEY=sk-...")
 		fmt.Println("    2. kubectl create secret generic openai-api-key \\")
 		fmt.Println("         -n apigee-api-operator-system --from-literal=api-key=sk-...")
-		fmt.Println("    3. apictl configure")
+		fmt.Println("    3. apilot configure")
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -126,7 +126,7 @@ func runGenerate(args []string) {
 	if prompt == "" {
 		fmt.Println()
 		fmt.Println("  \033[31m✗ No description provided.\033[0m")
-		fmt.Println("  Usage: apictl generate \"weather API at wttr.in\"")
+		fmt.Println("  Usage: apilot generate \"weather API at wttr.in\"")
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -135,7 +135,7 @@ func runGenerate(args []string) {
 	if cfg.Defaults.Organization == "" {
 		fmt.Println()
 		fmt.Println("  \033[31m✗ No Apigee organization (GCP project) configured.\033[0m")
-		fmt.Println("  Set it via: apictl configure, --org flag, or APIGEE_ORG env var")
+		fmt.Println("  Set it via: apilot configure, --org flag, or APIGEE_ORG env var")
 		fmt.Println()
 		os.Exit(1)
 	}

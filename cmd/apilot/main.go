@@ -1,12 +1,13 @@
-// Package main implements apictl — a CLI tool that converts natural language
-// descriptions into valid ApigeeAPI Kubernetes YAML manifests using OpenAI.
+// Package main implements apilot — your AI co-pilot for Apigee APIs.
+// It converts natural language descriptions into valid ApigeeAPI Kubernetes
+// YAML manifests using OpenAI.
 //
 // Usage:
 //
-//	apictl generate "weather API at wttr.in, rate limit 100/min"
-//	apictl generate "payments API with API key auth" --apply
-//	apictl configure
-//	apictl examples
+//	apilot generate "weather API at wttr.in, rate limit 100/min"
+//	apilot generate "payments API with API key auth" --apply
+//	apilot configure
+//	apilot examples
 package main
 
 import (
@@ -31,7 +32,7 @@ func main() {
 	case "examples", "ex":
 		runExamples()
 	case "version", "--version", "-v":
-		fmt.Printf("apictl %s\n", version)
+		fmt.Printf("apilot %s\n", version)
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -42,13 +43,13 @@ func main() {
 
 func printUsage() {
 	fmt.Println()
-	fmt.Println("  \033[1mapictl\033[0m — AI-powered ApigeeAPI YAML generator")
+	fmt.Println("  \033[1mapilot\033[0m — your AI co-pilot for Apigee APIs")
 	fmt.Println()
 	fmt.Println("  \033[36mUSAGE\033[0m")
-	fmt.Printf("    apictl generate \"description...\"   Convert English → ApigeeAPI YAML\n")
-	fmt.Printf("    apictl configure                   Set OpenAI API key & defaults\n")
-	fmt.Printf("    apictl examples                    Show example prompts\n")
-	fmt.Printf("    apictl version                     Print version\n")
+	fmt.Printf("    apilot generate \"description...\"   Convert English → ApigeeAPI YAML\n")
+	fmt.Printf("    apilot configure                   Set OpenAI API key & defaults\n")
+	fmt.Printf("    apilot examples                    Show example prompts\n")
+	fmt.Printf("    apilot version                     Print version\n")
 	fmt.Println()
 	fmt.Println("  \033[36mFLAGS (generate)\033[0m")
 	fmt.Printf("    --org, -o       Apigee organization (GCP project)\n")
@@ -62,18 +63,18 @@ func printUsage() {
 	fmt.Printf("    1. --api-key flag\n")
 	fmt.Printf("    2. OPENAI_API_KEY environment variable\n")
 	fmt.Printf("    3. Kubernetes secret 'openai-api-key' in namespace 'apigee-api-operator-system'\n")
-	fmt.Printf("    4. Config file ~/.config/apictl/config.yaml\n")
+	fmt.Printf("    4. Config file ~/.config/apilot/config.yaml\n")
 	fmt.Println()
 	fmt.Println("  \033[36mEXAMPLES\033[0m")
-	fmt.Printf("    apictl generate \"weather API at wttr.in with rate limiting\"\n")
-	fmt.Printf("    apictl generate \"payments API with API key auth\" --apply | kubectl apply -f -\n")
-	fmt.Printf("    apictl \"notification service, 5000 requests per day\"\n")
+	fmt.Printf("    apilot generate \"weather API at wttr.in with rate limiting\"\n")
+	fmt.Printf("    apilot generate \"payments API with API key auth\" --apply | kubectl apply -f -\n")
+	fmt.Printf("    apilot \"notification service, 5000 requests per day\"\n")
 	fmt.Println()
 }
 
 func runExamples() {
 	fmt.Println()
-	fmt.Println("  \033[1m🤖 Example Prompts for apictl generate\033[0m")
+	fmt.Println("  \033[1m🤖 Example Prompts for apilot generate\033[0m")
 	fmt.Println()
 
 	examples := []struct {
@@ -112,12 +113,12 @@ func runExamples() {
 	}
 
 	fmt.Println("  \033[36mUsage:\033[0m")
-	fmt.Printf("    apictl generate \"%s\"\n", examples[0].prompt)
+	fmt.Printf("    apilot generate \"%s\"\n", examples[0].prompt)
 	fmt.Println()
 
 	// Also print the one-liner shortcut
 	fmt.Println("  \033[36mShortcut (skip 'generate'):\033[0m")
-	fmt.Printf("    apictl \"%s\"\n", examples[1].prompt)
+	fmt.Printf("    apilot \"%s\"\n", examples[1].prompt)
 	fmt.Println()
 }
 

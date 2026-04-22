@@ -158,7 +158,7 @@ func editAndApply(yamlContent string) {
 	}
 
 	// Write to temp file
-	tmpFile, err := os.CreateTemp("", "apictl-*.yaml")
+	tmpFile, err := os.CreateTemp("", "apilot-*.yaml")
 	if err != nil {
 		fmt.Printf("  %s✗ Failed to create temp file: %v%s\n\n", colorRed, err, colorReset)
 		return

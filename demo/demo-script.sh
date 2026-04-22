@@ -599,9 +599,9 @@ section "Live: Natural Language → YAML → Deploy"
 say "Watch this. One English sentence. No YAML knowledge needed."
 echo ""
 
-# Check if apictl is available
-if command -v apictl &>/dev/null; then
-    run_and_pause "apictl generate \"weather API at wttr.in with rate limiting at 6 per minute and quota 5 per minute\" --org ${PROJECT} --env eval --apply" \
+# Check if apilot is available
+if command -v apilot &>/dev/null; then
+    run_and_pause "apilot generate \"weather API at wttr.in with rate limiting at 6 per minute and quota 5 per minute\" --org ${PROJECT} --env eval --apply" \
         "AI generates the YAML from English:"
 
     say "The AI understood the intent, picked the right policies, set the correct"
@@ -610,7 +610,7 @@ if command -v apictl &>/dev/null; then
 
     narrator "Now let's deploy it with kubectl -- same operator, same loop."
 
-    run_step "apictl generate \"secure payments API with API key auth and strict rate limiting\" --org ${PROJECT} --env eval --apply | $K apply -f -" \
+    run_step "apilot generate \"secure payments API with API key auth and strict rate limiting\" --org ${PROJECT} --env eval --apply | $K apply -f -" \
         "From English to live API in one command:"
 
     run_watch "$K get aapi -w" \
@@ -620,9 +620,9 @@ if command -v apictl &>/dev/null; then
     say "The entire pipeline. No human wrote a single line of YAML."
 else
     # Fallback: show what it would look like
-    echo -e "  ${Y}${BOLD}apictl is not installed. Showing what the command looks like:${NC}"
+    echo -e "  ${Y}${BOLD}apilot is not installed. Showing what the command looks like:${NC}"
     echo ""
-    echo -e "  ${BOLD}\$ apictl generate \"weather API at wttr.in with rate limiting\"${NC}"
+    echo -e "  ${BOLD}\$ apilot generate \"weather API at wttr.in with rate limiting\"${NC}"
     echo ""
     echo -e "  ${DIM}The AI would generate a valid ApigeeAPI YAML, and you'd review + apply.${NC}"
     echo -e "  ${DIM}Install with: make build-cli${NC}"
