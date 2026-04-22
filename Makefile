@@ -45,12 +45,10 @@ push: docker-build ## Build AND push to registry. Usage: make push REGISTRY=gcr.
 
 # ── CLI Tool (AI-powered YAML generator) ─────────────────────────────────────
 .PHONY: build-cli
-build-cli: ## Build and install apictl CLI to ~/.local/bin (available everywhere)
+build-cli: ## Build and install apictl CLI to /usr/local/bin
 	CGO_ENABLED=0 go build -ldflags="-s -w" -o apictl ./cmd/apictl/
-	@mkdir -p $(HOME)/.local/bin
-	@cp apictl $(HOME)/.local/bin/apictl
-	@echo "✓ apictl installed to ~/.local/bin"
-	@echo "  If not in PATH, run: export PATH=\$$HOME/.local/bin:\$$PATH"
+	sudo cp apictl /usr/local/bin/apictl
+	@echo "✓ apictl installed to /usr/local/bin"
 
 .PHONY: install-cli
 install-cli: build-cli ## Same as build-cli (alias)
