@@ -652,31 +652,28 @@ echo ""
 
 # Check if apilot is available
 if command -v apilot &>/dev/null; then
-    run_and_pause "apilot generate \"weather API at wttr.in with rate limiting at 6 per minute and quota 5 per minute\" --org ${PROJECT} --env eval --apply" \
-        "AI generates the YAML from English:"
+    run_step "apilot generate \"stock market API at https://finnhub.io with rate limiting at 10 per second\" --org ${PROJECT} --env eval" \
+        "API #1 — A stock market API with rate limiting:"
 
-    say "The AI understood the intent, picked the right policies, set the correct"
-    say "config values, and generated a valid Kubernetes CRD. In 3 seconds."
+    say "The AI picked the right policy, set the rate, and generated valid YAML."
+    say "You review and approve -- the operator handles the rest."
     echo ""
 
-    narrator "Now let's deploy it with kubectl -- same operator, same loop."
+    narrator "Let's try something more complex."
 
-    # Generate to temp file first, then apply (avoids any stdout contamination in pipe)
-    run_step "apilot generate \"secure payments API with API key auth and strict rate limiting\" --org ${PROJECT} --env eval --apply > /tmp/apilot-generated.yaml 2>/dev/null && echo '---' && cat /tmp/apilot-generated.yaml && echo '---' && $K apply -f /tmp/apilot-generated.yaml" \
-        "From English to live API in one command:"
+    run_step "apilot generate \"translation API at https://libretranslate.com with API key auth and quota of 5000 requests per day\" --org ${PROJECT} --env eval" \
+        "API #2 — A translation API with auth + quota:"
 
-    run_watch "$K get aapi -w" \
-        "Watch it deploy (Ctrl+C when Ready):"
-
-    say "English sentence → AI → YAML → Operator → Live API on Apigee."
-    say "The entire pipeline. No human wrote a single line of YAML."
+    say "English sentence → AI → YAML → You approve → Operator → Live API."
+    say "No YAML knowledge needed. The AI is your co-pilot."
 else
     # Fallback: show what it would look like
-    echo -e "  ${Y}${BOLD}apilot is not installed. Showing what the command looks like:${NC}"
+    echo -e "  ${Y}${BOLD}apilot is not installed. Showing what the commands look like:${NC}"
     echo ""
-    echo -e "  ${BOLD}\$ apilot generate \"weather API at wttr.in with rate limiting\"${NC}"
+    echo -e "  ${BOLD}\$ apilot generate \"stock market API with rate limiting\" --org \$PROJECT --env eval${NC}"
+    echo -e "  ${BOLD}\$ apilot generate \"translation API with API key auth\" --org \$PROJECT --env eval${NC}"
     echo ""
-    echo -e "  ${DIM}The AI would generate a valid ApigeeAPI YAML, and you'd review + apply.${NC}"
+    echo -e "  ${DIM}The AI generates valid YAML and you review + apply interactively.${NC}"
     echo -e "  ${DIM}Install with: make build-cli${NC}"
     echo ""
     echo -en "  ${C}Press ENTER to continue >${NC}  "
