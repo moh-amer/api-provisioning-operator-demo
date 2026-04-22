@@ -193,19 +193,19 @@ _art_3am() {
 
 _art_epilogue() {
     echo ""
-    echo -e "${BOLD}  ============= THE LIFE OF AN API ===============${NC}"
+    echo -e "${BOLD}  ================= THE LIFE OF AN API ===================${NC}"
     echo ""
-    echo -e "${G}  Birth${NC}       ${Y}Intern${NC}      ${R}Growing${NC}     ${M}Sunset${NC}      ${C}3am${NC}        ${B}Fleet${NC}"
-    echo -e "${G}   |${NC}  --------> ${Y}|${NC}  -------> ${R}|${NC}  -------> ${M}|${NC}  -------> ${C}|${NC}  ------> ${B}|${NC}"
-    echo -e "${G}   |${NC}           ${Y}|${NC}          ${R}|${NC}          ${M}|${NC}          ${C}|${NC}         ${B}|${NC}"
-    echo -e "${G}  YAML${NC}       ${Y}5 patches${NC}   ${R}+policies${NC}  ${M}Finalizer${NC}  ${C}Self-heal${NC}   ${B}4 APIs${NC}"
-    echo -e "${G}  apply${NC}      ${Y}deduped${NC}     ${R}Day 2 ops${NC}  ${M}cleanup${NC}    ${C}drift fix${NC}  ${B}parallel${NC}"
+    echo -e "${G}  Birth${NC}     ${Y}Intern${NC}    ${R}Growing${NC}   ${M}Sunset${NC}    ${C}3am${NC}      ${B}Fleet${NC}     ${M}${BOLD}AI${NC}"
+    echo -e "${G}   |${NC}  ----->${Y}|${NC}  ----->${R}|${NC}  ----->${M}|${NC}  ----->${C}|${NC}  ----->${B}|${NC}  ----->${M}|${NC}"
+    echo -e "${G}   |${NC}        ${Y}|${NC}        ${R}|${NC}        ${M}|${NC}        ${C}|${NC}       ${B}|${NC}       ${M}|${NC}"
+    echo -e "${G}  YAML${NC}     ${Y}dedup${NC}    ${R}policies${NC}  ${M}cleanup${NC}  ${C}heal${NC}     ${B}fleet${NC}    ${M}${BOLD}NL→YAML${NC}"
+    echo -e "${G}  apply${NC}    ${Y}idmptnt${NC}   ${R}Day 2${NC}    ${M}finalizr${NC} ${C}drift${NC}    ${B}parallel${NC} ${M}${BOLD}English${NC}"
     echo ""
-    echo -e "${DIM}  ...............................................................${NC}"
-    echo -e "${BOLD}  All automated. Zero manual steps.                            ${NC}"
-    echo -e "${DIM}  ...............................................................${NC}"
+    echo -e "${DIM}  .................................................................${NC}"
+    echo -e "${BOLD}  All automated. Zero manual steps. Now AI-assisted too.        ${NC}"
+    echo -e "${DIM}  .................................................................${NC}"
     echo ""
-    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    echo -en "  ${C}Press ENTER to continue >  ${NC}"
     read -r
 }
 
@@ -292,6 +292,7 @@ echo -e "  ${DIM}2. Growing Pains -- adding rate limiting live${NC}"
 echo -e "  ${DIM}3. The Sunset -- decommissioning with finalizers${NC}"
 echo -e "  ${DIM}4. The 3am Incident -- drift detection${NC}"
 echo -e "  ${DIM}5. The Empire -- scaling to a fleet${NC}"
+echo -e "  ${DIM}6. One More Thing... -- AI-powered generation${NC}"
 echo ""
 echo -en "  ${C}Press ENTER to begin the story >${NC}  "
 read -r
@@ -563,6 +564,93 @@ say "Each team owns their policies. The operator enforces them uniformly. GitOps
 next
 
 # =============================================================================
+# ACT 7 -- ONE MORE THING (AI-POWERED GENERATION)
+# =============================================================================
+act "One More Thing..."
+
+narrator "Everything you've seen so far starts with YAML."
+say "You write the YAML. The operator handles the rest."
+echo ""
+say "But what if you didn't even have to write the YAML?"
+echo ""
+sleep 1
+
+section "AI meets the Operator"
+
+narrator "Let me just tell the AI what I want... in plain English."
+
+echo ""
+echo -e "${M}${BOLD}  ┌──────────────────────────────────────────────────────┐${NC}"
+echo -e "${M}${BOLD}  │                                                      │${NC}"
+echo -e "${M}${BOLD}  │${NC}  ${BOLD} Human   ${NC}---->  ${M}AI (LLM)${NC}  ---->  ${G}YAML${NC}  ---->  ${C}Operator${NC}  ${M}${BOLD}│${NC}"
+echo -e "${M}${BOLD}  │${NC}                                                      ${M}${BOLD}│${NC}"
+echo -e "${M}${BOLD}  │${NC}  ${DIM}\"I need a         generates      deploys to    self-heals${NC}  ${M}${BOLD}│${NC}"
+echo -e "${M}${BOLD}  │${NC}  ${DIM} weather API       valid CRD      Apigee       + protects${NC}   ${M}${BOLD}│${NC}"
+echo -e "${M}${BOLD}  │${NC}  ${DIM} with rate                                              ${NC}  ${M}${BOLD}│${NC}"
+echo -e "${M}${BOLD}  │${NC}  ${DIM} limiting\"                                              ${NC}  ${M}${BOLD}│${NC}"
+echo -e "${M}${BOLD}  │                                                      │${NC}"
+echo -e "${M}${BOLD}  └──────────────────────────────────────────────────────┘${NC}"
+echo ""
+echo -en "  ${C}Press ENTER to continue >${NC}  "
+read -r
+
+section "Live: Natural Language → YAML → Deploy"
+
+say "Watch this. One English sentence. No YAML knowledge needed."
+echo ""
+
+# Check if apictl is available
+if command -v apictl &>/dev/null; then
+    run_and_pause "apictl generate \"weather API at wttr.in with rate limiting at 6 per minute and quota 5 per minute\" --org ${PROJECT} --env eval --apply" \
+        "AI generates the YAML from English:"
+
+    say "The AI understood the intent, picked the right policies, set the correct"
+    say "config values, and generated a valid Kubernetes CRD. In 3 seconds."
+    echo ""
+
+    narrator "Now let's deploy it with kubectl -- same operator, same loop."
+
+    run_step "apictl generate \"secure payments API with API key auth and strict rate limiting\" --org ${PROJECT} --env eval --apply | $K apply -f -" \
+        "From English to live API in one command:"
+
+    run_watch "$K get aapi -w" \
+        "Watch it deploy (Ctrl+C when Ready):"
+
+    say "English sentence → AI → YAML → Operator → Live API on Apigee."
+    say "The entire pipeline. No human wrote a single line of YAML."
+else
+    # Fallback: show what it would look like
+    echo -e "  ${Y}${BOLD}apictl is not installed. Showing what the command looks like:${NC}"
+    echo ""
+    echo -e "  ${BOLD}\$ apictl generate \"weather API at wttr.in with rate limiting\"${NC}"
+    echo ""
+    echo -e "  ${DIM}The AI would generate a valid ApigeeAPI YAML, and you'd review + apply.${NC}"
+    echo -e "  ${DIM}Install with: make build-cli${NC}"
+    echo ""
+    echo -en "  ${C}Press ENTER to continue >${NC}  "
+    read -r
+fi
+echo ""
+
+section "The Full Stack"
+
+echo -e "  ${BOLD}What we just demonstrated:${NC}"
+echo ""
+echo -e "  ${M}1.${NC}  ${BOLD}AI generates${NC}    valid Kubernetes YAML from plain English"
+echo -e "  ${G}2.${NC}  ${BOLD}CRD validates${NC}   schema, types, enums before the operator sees it"
+echo -e "  ${C}3.${NC}  ${BOLD}Operator deploys${NC} to Apigee via REST API (bundle + deploy)"
+echo -e "  ${Y}4.${NC}  ${BOLD}Self-heals${NC}      if anything drifts (3am incident)"
+echo -e "  ${B}5.${NC}  ${BOLD}Finalizers${NC}      clean up when you delete"
+echo ""
+echo -e "  ${DIM}AI → Kubernetes → Operator → Cloud.${NC}"
+echo -e "  ${DIM}The full stack of API automation.${NC}"
+echo ""
+echo -en "  ${C}Press ENTER to continue >${NC}  "
+read -r
+
+next
+
+# =============================================================================
 # EPILOGUE
 # =============================================================================
 clear
@@ -581,11 +669,12 @@ echo -e "  ${Y}2.${NC}  Get rate-limited when traffic spiked"
 echo -e "  ${R}3.${NC}  Be decommissioned with guaranteed cleanup"
 echo -e "  ${M}4.${NC}  Come back from the dead at 3am"
 echo -e "  ${C}5.${NC}  Scale to a fleet of services"
+echo -e "  ${M}6.${NC}  Be generated from plain English by AI"
 echo ""
-echo -e "  ${BOLD}All without a single manual step.${NC}"
+echo -e "  ${BOLD}All without a single manual step. Now with AI superpowers.${NC}"
 echo ""
-echo -e "  ${DIM}The operator is the thermostat.${NC}"
-echo -e "  ${DIM}It reads the sensor. It converges. It does not sleep.${NC}"
+echo -e "  ${DIM}The operator is the thermostat. The AI is the voice assistant.${NC}"
+echo -e "  ${DIM}\"Hey operator, I need a weather API\" — and it just happens.${NC}"
 echo ""
 echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
 echo -e "  ${BOLD}Q&A${NC}"
