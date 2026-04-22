@@ -67,7 +67,7 @@ Policies run in the ProxyEndpoint PreFlow Request, in declaration order.
 6. Do NOT include organization, environment, or namespace in your response.
    These are injected by the CLI tool.
 7. If the user specifies a real service (e.g. "wttr.in"), use its real URL.
-   If no specific backend is mentioned, use "https://httpbin.org" as placeholder.
+   If no specific backend is mentioned, try to find a free service that's working that satisfy his request or fallback to use "https://httpbin.org" as placeholder.
 
 ## Examples
 
