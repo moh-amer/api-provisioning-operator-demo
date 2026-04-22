@@ -610,7 +610,8 @@ if command -v apilot &>/dev/null; then
 
     narrator "Now let's deploy it with kubectl -- same operator, same loop."
 
-    run_step "apilot generate \"secure payments API with API key auth and strict rate limiting\" --org ${PROJECT} --env eval --apply | $K apply -f -" \
+    # Generate to temp file first, then apply (avoids any stdout contamination in pipe)
+    run_step "apilot generate \"secure payments API with API key auth and strict rate limiting\" --org ${PROJECT} --env eval --apply > /tmp/apilot-generated.yaml 2>/dev/null && echo '---' && cat /tmp/apilot-generated.yaml && echo '---' && $K apply -f /tmp/apilot-generated.yaml" \
         "From English to live API in one command:"
 
     run_watch "$K get aapi -w" \
