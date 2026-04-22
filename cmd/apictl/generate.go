@@ -22,10 +22,62 @@ type APISpec struct {
 	Policies    []PolicySpec `json:"policies" jsonschema_description:"Ordered list of Apigee policies"`
 }
 
-// PolicySpec is a single policy in the structured output.
+// PolicySpec uses explicit fields instead of map[string]string because
+// OpenAI's strict structured output requires additionalProperties:false
+// at every level, which is incompatible with Go maps.
+// The model fills in relevant fields and leaves others as empty strings.
 type PolicySpec struct {
-	Type   string            `json:"type" jsonschema:"enum=Quota,enum=SpikeArrest,enum=VerifyAPIKey,enum=CORS,enum=OAuthV2" jsonschema_description:"Apigee policy type"`
-	Config map[string]string `json:"config" jsonschema_description:"Policy-specific key-value configuration"`
+	Type           string `json:"type" jsonschema:"enum=Quota,enum=SpikeArrest,enum=VerifyAPIKey,enum=CORS,enum=OAuthV2" jsonschema_description:"Apigee policy type"`
+	Rate           string `json:"rate" jsonschema_description:"SpikeArrest rate. Format: Nps or Npm. Example: 100pm, 10ps. Empty if not SpikeArrest."`
+	Allow          string `json:"allow" jsonschema_description:"Quota max requests per interval. Example: 1000. Empty if not Quota."`
+	Interval       string `json:"interval" jsonschema_description:"Quota interval count. Example: 1. Empty if not Quota."`
+	TimeUnit       string `json:"timeUnit" jsonschema_description:"Quota time unit: minute, hour, day, month. Empty if not Quota."`
+	ApiKeyLocation string `json:"apiKeyLocation" jsonschema_description:"VerifyAPIKey location: queryparam or header. Empty if not VerifyAPIKey."`
+	ApiKeyName     string `json:"apiKeyName" jsonschema_description:"VerifyAPIKey param/header name. Example: x-api-key. Empty if not VerifyAPIKey."`
+	AllowOrigins   string `json:"allowOrigins" jsonschema_description:"CORS allowed origin. Example: * or https://myapp.com. Empty if not CORS."`
+	AllowMethods   string `json:"allowMethods" jsonschema_description:"CORS allowed methods. Example: GET,POST,DELETE. Empty if not CORS."`
+	AllowHeaders   string `json:"allowHeaders" jsonschema_description:"CORS allowed headers. Example: Content-Type,Authorization. Empty if not CORS."`
+}
+
+// toConfigMap converts the flat PolicySpec fields into a key-value config map,
+// including only non-empty fields relevant to the policy type.
+func (p PolicySpec) toConfigMap() map[string]string {
+	cfg := make(map[string]string)
+	switch p.Type {
+	case "SpikeArrest":
+		if p.Rate != "" {
+			cfg["rate"] = p.Rate
+		}
+	case "Quota":
+		if p.Allow != "" {
+			cfg["allow"] = p.Allow
+		}
+		if p.Interval != "" {
+			cfg["interval"] = p.Interval
+		}
+		if p.TimeUnit != "" {
+			cfg["timeUnit"] = p.TimeUnit
+		}
+	case "VerifyAPIKey":
+		if p.ApiKeyLocation != "" {
+			cfg["apiKeyLocation"] = p.ApiKeyLocation
+		}
+		if p.ApiKeyName != "" {
+			cfg["apiKeyName"] = p.ApiKeyName
+		}
+	case "CORS":
+		if p.AllowOrigins != "" {
+			cfg["allowOrigins"] = p.AllowOrigins
+		}
+		if p.AllowMethods != "" {
+			cfg["allowMethods"] = p.AllowMethods
+		}
+		if p.AllowHeaders != "" {
+			cfg["allowHeaders"] = p.AllowHeaders
+		}
+	// OAuthV2 has no config
+	}
+	return cfg
 }
 
 // generateSchema creates the JSON schema for structured output.
@@ -181,9 +233,10 @@ func buildFullYAML(spec *APISpec, cfg Config) string {
 		b.WriteString("  policies:\n")
 		for _, p := range spec.Policies {
 			b.WriteString(fmt.Sprintf("    - type: %s\n", p.Type))
-			if len(p.Config) > 0 {
+			cfg := p.toConfigMap()
+			if len(cfg) > 0 {
 				b.WriteString("      config:\n")
-				for k, v := range p.Config {
+				for k, v := range cfg {
 					b.WriteString(fmt.Sprintf("        %s: %q\n", k, v))
 				}
 			}
