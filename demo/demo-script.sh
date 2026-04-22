@@ -13,6 +13,10 @@ DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="${KUBECTL:-kubectl}"
 DEMO_EXAMPLES="./demo/examples"
 
+# Jump to a specific act: ./demo/demo-script.sh 7  (or START_ACT=7)
+START_ACT="${1:-${START_ACT:-0}}"
+CURRENT_ACT=0
+
 # Run everything from repo root
 cd "$DEMO_DIR"
 
@@ -276,9 +280,15 @@ _start_log_stream() {
 
 trap '[[ -n "$LOG_STREAM_PID" ]] && kill "$LOG_STREAM_PID" 2>/dev/null || true' EXIT
 
+# -- Always start log stream regardless of which act we jump to ---------------
+_start_log_stream
+sleep 1
+
 # =============================================================================
 # PROLOGUE
 # =============================================================================
+CURRENT_ACT=0
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 clear
 echo ""
 echo -e "${C}$(printf '=%.0s' $(seq 1 58))${NC}"
@@ -298,8 +308,7 @@ echo -en "  ${C}Press ENTER to begin the story >${NC}  "
 read -r
 clear
 
-_start_log_stream
-sleep 1
+clear
 
 # -- Prologue narration -------------------------------------------------------
 narrator "Monday morning. 9:17 AM."
@@ -332,9 +341,13 @@ _art_prologue
 
 next
 
+fi  # end PROLOGUE skip
+
 # =============================================================================
 # ACT 1 -- THE BIRTH
 # =============================================================================
+CURRENT_ACT=1
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 act "The Birth"
 
 narrator "Let's deploy this API."
@@ -395,9 +408,13 @@ diagram "  You wrote YAML.
 
 next
 
+fi  # end ACT 1 skip
+
 # =============================================================================
 # ACT 3 -- GROWING PAINS
 # =============================================================================
+CURRENT_ACT=2
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 act "Growing Pains"
 
 narrator "10,000 requests/hour. The backend team says: add rate limiting."
@@ -443,9 +460,13 @@ say "Operators handle Day 2, not just Day 1."
 
 next
 
+fi  # end ACT 3 skip
+
 # =============================================================================
 # ACT 4 -- THE SUNSET
 # =============================================================================
+CURRENT_ACT=3
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 act "The Sunset"
 
 narrator "Time to decommission v1. But Apigee proxies live outside the cluster."
@@ -476,9 +497,13 @@ say "The loop IS the recovery. Finalizers must be idempotent."
 
 next
 
+fi  # end ACT 4 skip
+
 # =============================================================================
 # ACT 5 -- THE 3AM INCIDENT
 # =============================================================================
+CURRENT_ACT=4
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 act "The 3am Incident"
 
 narrator "V2 deployed. Team goes home."
@@ -527,9 +552,13 @@ diagram "  Proxy deleted -> resync detects 404 -> re-create -> deploy -> Ready
 
 next
 
+fi  # end ACT 5 skip
+
 # =============================================================================
 # ACT 6 -- THE EMPIRE
 # =============================================================================
+CURRENT_ACT=5
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 act "The Empire"
 
 narrator "Platform is growing: orders, payments, notifications."
@@ -563,9 +592,13 @@ say "Each team owns their policies. The operator enforces them uniformly. GitOps
 
 next
 
+fi  # end ACT 6 skip
+
 # =============================================================================
 # ACT 7 -- ONE MORE THING (AI-POWERED GENERATION)
 # =============================================================================
+CURRENT_ACT=6
+if [[ $START_ACT -le $CURRENT_ACT ]]; then
 act "One More Thing..."
 
 narrator "Everything you've seen so far starts with YAML."
@@ -650,6 +683,8 @@ echo -en "  ${C}Press ENTER to continue >${NC}  "
 read -r
 
 next
+
+fi  # end ACT 7 skip
 
 # =============================================================================
 # EPILOGUE
