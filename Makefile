@@ -43,6 +43,26 @@ push: docker-build ## Build AND push to registry. Usage: make push REGISTRY=gcr.
 	docker push $(REMOTE_IMAGE)
 	@echo "✓ Pushed: $(REMOTE_IMAGE)"
 
+# ── CLI Tool (AI-powered YAML generator) ─────────────────────────────────────
+.PHONY: build-cli
+build-cli: ## Build the apictl CLI tool (AI-powered YAML generator)
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o apictl ./cmd/apictl/
+
+.PHONY: install-cli
+install-cli: build-cli ## Install apictl to $$GOPATH/bin
+	@cp apictl $$(go env GOPATH)/bin/apictl
+	@echo "✓ apictl installed to $$(go env GOPATH)/bin"
+
+.PHONY: setup-openai-secret
+setup-openai-secret: ## Store OpenAI API key as K8s secret. Usage: make setup-openai-secret API_KEY=sk-...
+	@[[ -n "$(API_KEY)" ]] || (echo "ERROR: API_KEY required. Usage: make setup-openai-secret API_KEY=sk-..." && exit 1)
+	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	@kubectl create secret generic openai-api-key \
+		--namespace $(NAMESPACE) \
+		--from-literal=api-key=$(API_KEY) \
+		--dry-run=client -o yaml | kubectl apply -f -
+	@echo "✓ Secret 'openai-api-key' created in namespace '$(NAMESPACE)'"
+
 # ── Auth Setup ────────────────────────────────────────────────────────────────
 .PHONY: setup-auth
 setup-auth: ## Setup GCP auth (auto-detects cluster). Usage: make setup-auth PROJECT=my-project

@@ -4,6 +4,7 @@
 
 # ── Compiled binary ───────────────────────────────────────────────────────────
 apigee-api-operator
+/apictl
 *.exe
 *.exe~
 *.dll
