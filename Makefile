@@ -45,13 +45,15 @@ push: docker-build ## Build AND push to registry. Usage: make push REGISTRY=gcr.
 
 # ── CLI Tool (AI-powered YAML generator) ─────────────────────────────────────
 .PHONY: build-cli
-build-cli: ## Build the apictl CLI tool (AI-powered YAML generator)
+build-cli: ## Build and install apictl CLI to ~/.local/bin (available everywhere)
 	CGO_ENABLED=0 go build -ldflags="-s -w" -o apictl ./cmd/apictl/
+	@mkdir -p $(HOME)/.local/bin
+	@cp apictl $(HOME)/.local/bin/apictl
+	@echo "✓ apictl installed to ~/.local/bin"
+	@echo "  If not in PATH, run: export PATH=\$$HOME/.local/bin:\$$PATH"
 
 .PHONY: install-cli
-install-cli: build-cli ## Install apictl to $$GOPATH/bin
-	@cp apictl $$(go env GOPATH)/bin/apictl
-	@echo "✓ apictl installed to $$(go env GOPATH)/bin"
+install-cli: build-cli ## Same as build-cli (alias)
 
 .PHONY: setup-openai-secret
 setup-openai-secret: ## Store OpenAI API key as K8s secret. Usage: make setup-openai-secret API_KEY=sk-...
