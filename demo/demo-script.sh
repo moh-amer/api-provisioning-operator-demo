@@ -13,8 +13,26 @@ DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="${KUBECTL:-kubectl}"
 DEMO_EXAMPLES="./demo/examples"
 
-# Jump to a specific act: ./demo/demo-script.sh 7  (or START_ACT=7)
-START_ACT="${1:-${START_ACT:-0}}"
+# Jump to a specific act: ./demo/demo-script.sh 6
+# If no argument, show an interactive menu
+if [[ -n "${1:-}" ]]; then
+    START_ACT="$1"
+else
+    echo ""
+    echo -e "\033[1m  The Life of an API — Act Selection\033[0m"
+    echo ""
+    echo -e "  \033[36m0)\033[0m  Play from the beginning"
+    echo -e "  \033[36m1)\033[0m  The Birth — deploying the weather API"
+    echo -e "  \033[36m2)\033[0m  Growing Pains — adding rate limiting"
+    echo -e "  \033[36m3)\033[0m  The Sunset — decommissioning with finalizers"
+    echo -e "  \033[36m4)\033[0m  The 3am Incident — drift detection"
+    echo -e "  \033[36m5)\033[0m  The Empire — scaling to a fleet"
+    echo -e "  \033[36m6)\033[0m  One More Thing — AI-powered generation"
+    echo ""
+    echo -en "  \033[36mChoose act [0-6] >\033[0m  "
+    read -r START_ACT
+    START_ACT="${START_ACT:-0}"
+fi
 CURRENT_ACT=0
 
 # Run everything from repo root
